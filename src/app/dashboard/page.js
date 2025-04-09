@@ -36,7 +36,12 @@ export default function Dashboard() {
         <div className="header">
           <h1>R.K. Minerals</h1>
           <div className="user-info">
-            <span>Welcome, {user?.email || "User"}</span>
+            <span>
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              Welcome, {user?.email.split("@")[0] || "User"}
+            </span>
             <button className="logout-button" onClick={handleLogout}>
               Logout
             </button>
@@ -75,46 +80,6 @@ export default function Dashboard() {
                 Manage your inventory and stock levels
               </div>
             </div>
-
-            <div className="tool-card disabled">
-              <div className="tool-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="9" cy="7" r="4"></circle>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
-              </div>
-              <div className="tool-name">User Management</div>
-              <div className="tool-description">Coming soon</div>
-            </div>
-
-            <div className="tool-card disabled">
-              <div className="tool-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="12" y1="1" x2="12" y2="23"></line>
-                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                </svg>
-              </div>
-              <div className="tool-name">Finance</div>
-              <div className="tool-description">Coming soon</div>
-            </div>
           </div>
         </div>
       </main>
@@ -124,7 +89,6 @@ export default function Dashboard() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          width: 100%;
           margin-bottom: 40px;
         }
 
@@ -143,7 +107,6 @@ export default function Dashboard() {
         .logout-button {
           background-color: transparent;
           color: var(--primary);
-          border: 1px solid var(--primary);
           padding: 8px 16px;
           border-radius: 4px;
           cursor: pointer;

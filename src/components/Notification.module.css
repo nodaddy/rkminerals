@@ -1,0 +1,94 @@
+.notification-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 350px;
+  width: 100%;
+}
+
+.notification {
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s;
+  position: relative;
+  overflow: hidden;
+  color: white;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  transform-origin: bottom right;
+}
+
+.notification::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  animation: progressBar 3s linear;
+}
+
+.notification-success {
+  background: linear-gradient(135deg, #36b37e, #2ecfb0);
+}
+
+.notification-error {
+  background: linear-gradient(135deg, #ff5630, #ff8256);
+}
+
+.notification-info {
+  background: linear-gradient(135deg, #4c9aff, #6554c0);
+}
+
+.notification-warning {
+  background: linear-gradient(135deg, #ffab00, #ffcc80);
+}
+
+.content {
+  flex: 1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes progressBar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@media (max-width: 480px) {
+  .notification-container {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}

@@ -5,6 +5,7 @@ import {
   loginWithEmailAndPassword,
   logout as firebaseLogout,
   subscribeToAuthChanges,
+  getUserClaims,
 } from "../firebase/services/auth";
 
 // Create the AppContext
@@ -20,14 +21,40 @@ export function AppContextProvider({ children }) {
   // Define your state variables here
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [companyId, setCompanyId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
+  // Fetch user claims including role
+  const fetchUserClaims = async (currentUser) => {
+    if (!currentUser) {
+      setUserRole(null);
+      return;
+    }
+
+    const claims = await getUserClaims(currentUser);
+    if (claims && claims.companyId) {
+      setUserRole(claims?.role || "admin");
+      setCompanyId(claims?.companyId);
+    } else {
+      setUserRole("user"); // Default role if none is specified
+      // break the application and do not allow the user to use the application
+      console.log("No companyId found");
+      // break the application
+      throw new Error("No companyId found");
+    }
+  };
+
   // Subscribe to auth state changes
   useEffect(() => {
-    const unsubscribe = subscribeToAuthChanges((currentUser) => {
+    const unsubscribe = subscribeToAuthChanges(async (currentUser) => {
       setUser(currentUser);
       setIsLoggedIn(!!currentUser);
+
+      // Get user claims including role
+      await fetchUserClaims(currentUser);
+
       setLoading(false);
     });
 
@@ -48,6 +75,9 @@ export function AppContextProvider({ children }) {
       return false;
     }
 
+    // Fetch user claims after successful login
+    await fetchUserClaims(user);
+
     setLoading(false);
     return true;
   };
@@ -59,6 +89,9 @@ export function AppContextProvider({ children }) {
 
     if (!success) {
       setAuthError(error);
+    } else {
+      // Clear user role on logout
+      setUserRole(null);
     }
 
     setLoading(false);
@@ -70,7 +103,9 @@ export function AppContextProvider({ children }) {
     // State
     isLoggedIn,
     user,
+    userRole,
     loading,
+    companyId,
     authError,
 
     // Methods

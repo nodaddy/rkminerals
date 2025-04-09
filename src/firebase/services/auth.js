@@ -33,3 +33,22 @@ export const logout = async () => {
 export const subscribeToAuthChanges = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
+
+// Get user custom claims (including role)
+export const getUserClaims = async (user) => {
+  if (!user) return null;
+
+  try {
+    // Force token refresh to get the latest claims
+    await user.getIdToken(true);
+
+    // Get the ID token result which includes the claims
+    const idTokenResult = await user.getIdTokenResult();
+
+    // Return the custom claims
+    return idTokenResult.claims;
+  } catch (error) {
+    console.error("Error getting user claims:", error);
+    return null;
+  }
+};
