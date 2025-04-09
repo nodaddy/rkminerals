@@ -31,25 +31,18 @@ export default function Dashboard() {
   }
 
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <div className="header">
-          <h1>R.K. Minerals</h1>
-          <div className="user-info">
-            <span>
-              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-              Welcome, {user?.email.split("@")[0] || "User"}
-            </span>
-            <button className="logout-button" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
-        </div>
-
+    <div>
+      <main
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "flex-start",
+          height: "100vh",
+          paddingTop: "60px",
+        }}
+      >
         <div className="tools-container">
-          <h2>Available Tools</h2>
+          <h2>RK Minerals Tools</h2>
           <p className="tools-intro">Select a tool to get started</p>
 
           <div className="tools-grid">
@@ -119,7 +112,10 @@ export default function Dashboard() {
 
         .tools-container {
           width: 100%;
+          padding: 40px;
+          border-radius: 12px;
           max-width: 1000px;
+          background-color: white;
         }
 
         h2 {
@@ -140,18 +136,16 @@ export default function Dashboard() {
 
         .tool-card {
           background-color: white;
-          border: 1px solid var(--neutral-200);
+          border: 1px solid var(--primary);
           border-radius: 12px;
           padding: 24px;
           display: flex;
           flex-direction: column;
           align-items: center;
           cursor: pointer;
-          transition: transform 0.2s, box-shadow 0.2s;
         }
 
         .tool-card:hover {
-          transform: translateY(-4px);
           box-shadow: var(--shadow-md);
           border-color: var(--primary-light);
         }
