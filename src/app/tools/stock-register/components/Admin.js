@@ -93,43 +93,12 @@ const Admin = () => {
 };
 
 const ProductsForm = () => {
-  const { companyId } = useAppContext();
+  const { companyId, products, fetchEntities } = useAppContext();
   const { showSuccess, showError } = useNotification();
   const [technicalName, setTechnicalName] = useState("");
   const [commonName, setCommonName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
-
-  // Fetch products data
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const companyRef = doc(db, "companies", companyId);
-        const productsCollectionRef = collection(companyRef, "products");
-        const productsQuery = query(
-          productsCollectionRef,
-          orderBy("createdAt", "desc")
-        );
-        const querySnapshot = await getDocs(productsQuery);
-
-        const productsData = [];
-        querySnapshot.forEach((doc) => {
-          productsData.push({ id: doc.id, ...doc.data() });
-        });
-
-        setProducts(productsData);
-      } catch (err) {
-        console.error("Error fetching products:", err);
-        showError("Failed to fetch products");
-      }
-    };
-
-    if (companyId) {
-      fetchProducts();
-    }
-  }, [companyId, refreshTrigger, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -149,7 +118,7 @@ const ProductsForm = () => {
       setTechnicalName("");
       setCommonName("");
       showSuccess("Product added successfully!");
-      setRefreshTrigger((prev) => prev + 1); // Trigger a refresh of the products list
+      fetchEntities(); // Refresh entities after adding
     } catch (err) {
       console.error("Error adding product:", err);
       showError("Failed to add product. Please try again.");
@@ -170,7 +139,7 @@ const ProductsForm = () => {
       await deleteDoc(productDocRef);
 
       showSuccess("Product deleted successfully!");
-      setRefreshTrigger((prev) => prev + 1);
+      fetchEntities(); // Refresh entities after deleting
     } catch (err) {
       console.error("Error deleting product:", err);
       showError("Failed to delete product. Please try again.");
@@ -260,42 +229,11 @@ const ProductsForm = () => {
 };
 
 const MachinesForm = () => {
-  const { companyId } = useAppContext();
+  const { companyId, machines, fetchEntities } = useAppContext();
   const { showSuccess, showError } = useNotification();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [machines, setMachines] = useState([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
-
-  // Fetch machines data
-  useEffect(() => {
-    const fetchMachines = async () => {
-      try {
-        const companyRef = doc(db, "companies", companyId);
-        const machinesCollectionRef = collection(companyRef, "machines");
-        const machinesQuery = query(
-          machinesCollectionRef,
-          orderBy("createdAt", "desc")
-        );
-        const querySnapshot = await getDocs(machinesQuery);
-
-        const machinesData = [];
-        querySnapshot.forEach((doc) => {
-          machinesData.push({ id: doc.id, ...doc.data() });
-        });
-
-        setMachines(machinesData);
-      } catch (err) {
-        console.error("Error fetching machines:", err);
-        showError("Failed to fetch machines");
-      }
-    };
-
-    if (companyId) {
-      fetchMachines();
-    }
-  }, [companyId, refreshTrigger, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -313,7 +251,7 @@ const MachinesForm = () => {
       console.log("Machine added:", { name });
       setName("");
       showSuccess("Machine added successfully!");
-      setRefreshTrigger((prev) => prev + 1); // Trigger a refresh of the machines list
+      fetchEntities(); // Refresh entities after adding
     } catch (err) {
       console.error("Error adding machine:", err);
       showError("Failed to add machine. Please try again.");
@@ -334,7 +272,7 @@ const MachinesForm = () => {
       await deleteDoc(machineDocRef);
 
       showSuccess("Machine deleted successfully!");
-      setRefreshTrigger((prev) => prev + 1);
+      fetchEntities(); // Refresh entities after deleting
     } catch (err) {
       console.error("Error deleting machine:", err);
       showError("Failed to delete machine. Please try again.");
@@ -408,42 +346,11 @@ const MachinesForm = () => {
 };
 
 const SuppliersForm = () => {
-  const { companyId } = useAppContext();
+  const { companyId, suppliers, fetchEntities } = useAppContext();
   const { showSuccess, showError } = useNotification();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [suppliers, setSuppliers] = useState([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
-
-  // Fetch suppliers data
-  useEffect(() => {
-    const fetchSuppliers = async () => {
-      try {
-        const companyRef = doc(db, "companies", companyId);
-        const suppliersCollectionRef = collection(companyRef, "suppliers");
-        const suppliersQuery = query(
-          suppliersCollectionRef,
-          orderBy("createdAt", "desc")
-        );
-        const querySnapshot = await getDocs(suppliersQuery);
-
-        const suppliersData = [];
-        querySnapshot.forEach((doc) => {
-          suppliersData.push({ id: doc.id, ...doc.data() });
-        });
-
-        setSuppliers(suppliersData);
-      } catch (err) {
-        console.error("Error fetching suppliers:", err);
-        showError("Failed to fetch suppliers");
-      }
-    };
-
-    if (companyId) {
-      fetchSuppliers();
-    }
-  }, [companyId, refreshTrigger, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -461,7 +368,7 @@ const SuppliersForm = () => {
       console.log("Supplier added:", { name });
       setName("");
       showSuccess("Supplier added successfully!");
-      setRefreshTrigger((prev) => prev + 1); // Trigger a refresh of the suppliers list
+      fetchEntities(); // Refresh entities after adding
     } catch (err) {
       console.error("Error adding supplier:", err);
       showError("Failed to add supplier. Please try again.");
@@ -482,7 +389,7 @@ const SuppliersForm = () => {
       await deleteDoc(supplierDocRef);
 
       showSuccess("Supplier deleted successfully!");
-      setRefreshTrigger((prev) => prev + 1);
+      fetchEntities(); // Refresh entities after deleting
     } catch (err) {
       console.error("Error deleting supplier:", err);
       showError("Failed to delete supplier. Please try again.");
@@ -556,42 +463,11 @@ const SuppliersForm = () => {
 };
 
 const BuyersForm = () => {
-  const { companyId } = useAppContext();
+  const { companyId, buyers, fetchEntities } = useAppContext();
   const { showSuccess, showError } = useNotification();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [buyers, setBuyers] = useState([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
-
-  // Fetch buyers data
-  useEffect(() => {
-    const fetchBuyers = async () => {
-      try {
-        const companyRef = doc(db, "companies", companyId);
-        const buyersCollectionRef = collection(companyRef, "buyers");
-        const buyersQuery = query(
-          buyersCollectionRef,
-          orderBy("createdAt", "desc")
-        );
-        const querySnapshot = await getDocs(buyersQuery);
-
-        const buyersData = [];
-        querySnapshot.forEach((doc) => {
-          buyersData.push({ id: doc.id, ...doc.data() });
-        });
-
-        setBuyers(buyersData);
-      } catch (err) {
-        console.error("Error fetching buyers:", err);
-        showError("Failed to fetch buyers");
-      }
-    };
-
-    if (companyId) {
-      fetchBuyers();
-    }
-  }, [companyId, refreshTrigger, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -609,7 +485,7 @@ const BuyersForm = () => {
       console.log("Buyer added:", { name });
       setName("");
       showSuccess("Buyer added successfully!");
-      setRefreshTrigger((prev) => prev + 1); // Trigger a refresh of the buyers list
+      fetchEntities(); // Refresh entities after adding
     } catch (err) {
       console.error("Error adding buyer:", err);
       showError("Failed to add buyer. Please try again.");
@@ -630,7 +506,7 @@ const BuyersForm = () => {
       await deleteDoc(buyerDocRef);
 
       showSuccess("Buyer deleted successfully!");
-      setRefreshTrigger((prev) => prev + 1);
+      fetchEntities(); // Refresh entities after deleting
     } catch (err) {
       console.error("Error deleting buyer:", err);
       showError("Failed to delete buyer. Please try again.");
@@ -704,43 +580,12 @@ const BuyersForm = () => {
 };
 
 const BagTypesForm = () => {
-  const { companyId } = useAppContext();
+  const { companyId, bagTypes, fetchEntities } = useAppContext();
   const { showSuccess, showError } = useNotification();
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("");
   const [loading, setLoading] = useState(false);
-  const [bagTypes, setBagTypes] = useState([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
-
-  // Fetch bag types data
-  useEffect(() => {
-    const fetchBagTypes = async () => {
-      try {
-        const companyRef = doc(db, "companies", companyId);
-        const bagTypesCollectionRef = collection(companyRef, "bagTypes");
-        const bagTypesQuery = query(
-          bagTypesCollectionRef,
-          orderBy("createdAt", "desc")
-        );
-        const querySnapshot = await getDocs(bagTypesQuery);
-
-        const bagTypesData = [];
-        querySnapshot.forEach((doc) => {
-          bagTypesData.push({ id: doc.id, ...doc.data() });
-        });
-
-        setBagTypes(bagTypesData);
-      } catch (err) {
-        console.error("Error fetching bag types:", err);
-        showError("Failed to fetch bag types");
-      }
-    };
-
-    if (companyId) {
-      fetchBagTypes();
-    }
-  }, [companyId, refreshTrigger, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -752,15 +597,15 @@ const BagTypesForm = () => {
 
       await addDoc(bagTypesCollectionRef, {
         name,
-        capacity,
+        capacity: parseFloat(capacity),
         createdAt: new Date(),
       });
 
-      console.log("Bag Type added:", { name, capacity });
+      console.log("Bag type added:", { name, capacity });
       setName("");
       setCapacity("");
-      showSuccess("Bag Type added successfully!");
-      setRefreshTrigger((prev) => prev + 1); // Trigger a refresh of the bag types list
+      showSuccess("Bag type added successfully!");
+      fetchEntities(); // Refresh entities after adding
     } catch (err) {
       console.error("Error adding bag type:", err);
       showError("Failed to add bag type. Please try again.");
@@ -780,8 +625,8 @@ const BagTypesForm = () => {
       const bagTypeDocRef = doc(companyRef, "bagTypes", bagTypeId);
       await deleteDoc(bagTypeDocRef);
 
-      showSuccess("Bag Type deleted successfully!");
-      setRefreshTrigger((prev) => prev + 1);
+      showSuccess("Bag type deleted successfully!");
+      fetchEntities(); // Refresh entities after deleting
     } catch (err) {
       console.error("Error deleting bag type:", err);
       showError("Failed to delete bag type. Please try again.");
@@ -834,10 +679,10 @@ const BagTypesForm = () => {
         <h2>Add New Bag Type</h2>
         <form onSubmit={handleSubmit}>
           <div className={styles["form-group"]}>
-            <label htmlFor="bagName">Bag Name:</label>
+            <label htmlFor="bagTypeName">Bag Type Name:</label>
             <input
               type="text"
-              id="bagName"
+              id="bagTypeName"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -849,6 +694,8 @@ const BagTypesForm = () => {
             <input
               type="text"
               id="capacity"
+              step="0.01"
+              min="0"
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
               required

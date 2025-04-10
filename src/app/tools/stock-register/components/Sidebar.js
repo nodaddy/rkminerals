@@ -116,7 +116,6 @@ const Sidebar = ({
           </span>
           Dispatch Entries
         </div>
-
         <div
           className={`menu-item ${activeSection === "audit" ? "active" : ""}`}
           onClick={() => setActiveSection("audit")}
