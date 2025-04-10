@@ -5,9 +5,6 @@
 
 import OpenAI from "openai";
 
-// Remove static imports that cause build issues
-// Import PDF.js dynamically only when needed in the browser
-
 // Initialize OpenAI client
 let openaiClient = null;
 
@@ -46,6 +43,73 @@ export const getOpenAIClient = (apiKey) => {
 };
 
 /**
+ * Convert PDF to an image using pdf.js
+ * @param {File} pdfFile - The PDF file to convert
+ * @returns {Promise<string>} Base64 image data
+ */
+const convertPdfToImage = async (pdfFile) => {
+  try {
+    // Create a temporary URL for the PDF file
+    const pdfUrl = URL.createObjectURL(pdfFile);
+
+    // Load the PDF.js script dynamically
+    if (!window.pdfjsLib) {
+      // Load the PDF.js scripts dynamically
+      const pdfjsScript = document.createElement("script");
+      pdfjsScript.src =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
+      document.head.appendChild(pdfjsScript);
+
+      // Wait for the script to load
+      await new Promise((resolve) => {
+        pdfjsScript.onload = resolve;
+      });
+    }
+
+    // Now pdfjsLib should be available globally
+    const pdfjsLib = window.pdfjsLib;
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+    // Load the PDF
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdf = await loadingTask.promise;
+
+    // Get the first page
+    const page = await pdf.getPage(1);
+
+    // Set scale to balance size and quality (1.5 is a good starting point)
+    const scale = 1.5;
+    const viewport = page.getViewport({ scale });
+
+    // Create a canvas element
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    // Render the PDF page to the canvas
+    const renderContext = {
+      canvasContext: context,
+      viewport: viewport,
+    };
+
+    await page.render(renderContext).promise;
+
+    // Convert canvas to base64 image
+    const base64 = canvas.toDataURL("image/jpeg", 0.92);
+
+    // Clean up
+    URL.revokeObjectURL(pdfUrl);
+
+    return base64;
+  } catch (error) {
+    console.error("PDF conversion error:", error);
+    throw error;
+  }
+};
+
+/**
  * Process a PDF file and extract structured data from it
  * @param {File} pdfFile - The PDF file to process
  * @param {string} apiKey - OpenAI API key
@@ -55,141 +119,188 @@ export const processPdfInvoice = async (pdfFile, apiKey) => {
   try {
     const client = getOpenAIClient(apiKey);
 
-    let imageData;
-
     // Different handling based on file type
     if (pdfFile.type === "application/pdf") {
+      // Convert PDF to image
+      console.log("Converting PDF to image for processing...");
       try {
-        // Try converting PDF to image
-        imageData = await convertPdfToImage(pdfFile);
-      } catch (conversionError) {
-        console.error("Error converting PDF to image:", conversionError);
+        const imageBase64 = await convertPdfToImage(pdfFile);
 
-        // Fallback to using the base64 of the PDF directly
+        // Process the converted image with vision model
+        const response = await client.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Extract the following information from this invoice: 
+                  Date (as Invoice Date in pdf), 
+                  Product Name (Material Description in the pdf),
+                  Quantity(Qty in pdf),
+                  Truck Number(Vehicle Number in pdf),
+                  Invoice Number. 
+                  IMPORTANT: Return ONLY a valid JSON object with these fields: date, productName, quantity, truckNumber, invoiceNumber. Do not include any code, explanations, or regex in your response - just the JSON.`,
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: imageBase64,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 1000,
+        });
+
+        // Parse the response
+        const content = response.choices[0].message.content;
         try {
-          console.log("Attempting fallback: using PDF directly...");
-          imageData = await fileToBase64(pdfFile);
-
-          // Try to use the PDF as-is with GPT-4o
-          const response = await client.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `I'm providing a PDF invoice. Extract the following information from it: 
-                    Date (as Invoice Date), 
-                    Product Name (Material Description),
-                    Quantity(Qty),
-                    Truck Number(Vehicle Number),
-                    Invoice Number. 
-                    IMPORTANT: Return ONLY a valid JSON object with these fields: date, productName, quantity, truckNumber, invoiceNumber. Do not include any code, explanations, or regex in your response - just the JSON.`,
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: imageData,
-                    },
-                  },
-                ],
-              },
-            ],
-            max_tokens: 1000,
-          });
-
-          // Parse fallback response
-          const content = response.choices[0].message.content;
+          // Extract JSON from the response (handle cases where there might be text before/after the JSON)
           const jsonMatch = content.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
+            console.log("jsonMatch (converted PDF)", jsonMatch);
             const extractedData = JSON.parse(jsonMatch[0]);
             return {
               success: true,
               data: extractedData,
-              method: "fallback_direct",
+            };
+          } else {
+            console.error("Failed to extract JSON from response:", content);
+            return {
+              success: false,
+              error:
+                "Failed to extract structured data from the converted PDF image",
             };
           }
-        } catch (fallbackError) {
-          console.error("Fallback method failed too:", fallbackError);
-          // Continue to error handling below
+        } catch (parseError) {
+          console.error("Error parsing JSON response:", parseError);
+          return {
+            success: false,
+            error: "Failed to parse extracted data from converted PDF image",
+          };
         }
+      } catch (conversionError) {
+        console.error("Error converting PDF to image:", conversionError);
 
-        // If we get here, both methods failed
-        return {
-          success: false,
-          error:
-            "Could not process the PDF. Please upload an image of your invoice instead.",
-        };
+        // Fallback to text-only PDF processing if conversion fails
+        console.log("Falling back to text-only processing...");
+        const response = await client.chat.completions.create({
+          model: "gpt-4", // Using text-only model for fallback
+          messages: [
+            {
+              role: "user",
+              content: `I have a PDF invoice with text content. Please help me extract the following information: 
+                Date (as Invoice Date in pdf), 
+                Product Name (Material Description in the pdf),
+                Quantity(Qty in pdf),
+                Truck Number(Vehicle Number in pdf),
+                Invoice Number. 
+                IMPORTANT: Return ONLY a valid JSON object with these fields: date, productName, quantity, truckNumber, invoiceNumber. Do not include any code, explanations, or regex in your response - just the JSON.`,
+            },
+          ],
+          max_tokens: 1000,
+        });
+
+        // Parse the response
+        const content = response.choices[0].message.content;
+        try {
+          // Extract JSON from the response (handle cases where there might be text before/after the JSON)
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            console.log("jsonMatch (fallback)", jsonMatch);
+            const extractedData = JSON.parse(jsonMatch[0]);
+            return {
+              success: true,
+              data: extractedData,
+            };
+          } else {
+            console.error("Failed to extract JSON from response:", content);
+            return {
+              success: false,
+              error:
+                "Failed to extract structured data from the PDF. Please try uploading an image of the invoice instead.",
+              alternativeMethod: true,
+            };
+          }
+        } catch (parseError) {
+          console.error("Error parsing JSON response:", parseError);
+          return {
+            success: false,
+            error:
+              "Failed to parse extracted data from PDF. Please try uploading an image of the invoice instead.",
+            alternativeMethod: true,
+          };
+        }
       }
     } else if (
       pdfFile.type === "image/jpeg" ||
       pdfFile.type === "image/png" ||
       pdfFile.type === "image/gif"
     ) {
-      // For images, just use the base64 directly
-      imageData = await fileToBase64(pdfFile);
+      // For images, use the vision API directly
+      const base64 = await fileToBase64(pdfFile);
+      const response = await client.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Extract the following information from this invoice: 
+                Date (as Invoice Date in pdf), 
+                Product Name (Material Description in the pdf),
+                Quantity(Qty in pdf),
+                Truck Number(Vehicle Number in pdf),
+                Invoice Number. 
+                IMPORTANT: Return ONLY a valid JSON object with these fields: date, productName, quantity, truckNumber, invoiceNumber. Do not include any code, explanations, or regex in your response - just the JSON.`,
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: base64,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      });
+
+      // Parse the response
+      const content = response.choices[0].message.content;
+      try {
+        // Extract JSON from the response (handle cases where there might be text before/after the JSON)
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          console.log("jsonMatch (image)", jsonMatch);
+          const extractedData = JSON.parse(jsonMatch[0]);
+          return {
+            success: true,
+            data: extractedData,
+          };
+        } else {
+          console.error("Failed to extract JSON from response:", content);
+          return {
+            success: false,
+            error: "Failed to extract structured data from the image",
+          };
+        }
+      } catch (parseError) {
+        console.error("Error parsing JSON response:", parseError);
+        return {
+          success: false,
+          error: "Failed to parse extracted data",
+        };
+      }
     } else {
       return {
         success: false,
         error:
           "Only PDF, JPEG, PNG and GIF formats are supported. Please upload your invoice in one of these formats.",
-      };
-    }
-
-    // Use vision API for all files (PDFs are now converted to images)
-    const response = await client.chat.completions.create({
-      model: "gpt-4o", // Best model for image processing
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Extract the following information from this invoice: 
-              Date (as Invoice Date in pdf), 
-              Product Name (Material Description in the pdf),
-              Quantity(Qty in pdf),
-              Truck Number(Vehicle Number in pdf),
-              Invoice Number. 
-              IMPORTANT: Return ONLY a valid JSON object with these fields: date, productName, quantity, truckNumber, invoiceNumber. Do not include any code, explanations, or regex in your response - just the JSON.`,
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageData,
-              },
-            },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-    });
-
-    // Parse the response
-    const content = response.choices[0].message.content;
-    try {
-      // Extract JSON from the response (handle cases where there might be text before/after the JSON)
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        console.log("jsonMatch", jsonMatch);
-        const extractedData = JSON.parse(jsonMatch[0]);
-        return {
-          success: true,
-          data: extractedData,
-        };
-      } else {
-        console.error("Failed to extract JSON from response:", content);
-        return {
-          success: false,
-          error: "Failed to extract structured data from the document",
-        };
-      }
-    } catch (parseError) {
-      console.error("Error parsing JSON response:", parseError);
-      return {
-        success: false,
-        error: "Failed to parse extracted data",
       };
     }
   } catch (error) {
@@ -198,73 +309,6 @@ export const processPdfInvoice = async (pdfFile, apiKey) => {
       success: false,
       error: error.message || "Unknown error processing file",
     };
-  }
-};
-
-/**
- * Convert PDF to image
- * @param {File} pdfFile - The PDF file to convert
- * @returns {Promise<string>} Base64 representation of the first page as an image
- */
-const convertPdfToImage = async (pdfFile) => {
-  try {
-    // Convert File to ArrayBuffer
-    const arrayBuffer = await pdfFile.arrayBuffer();
-
-    // Need to set worker source before using PDF.js
-    if (typeof window !== "undefined") {
-      // We're in a browser environment - dynamically import PDF.js
-      try {
-        // Dynamic import to avoid SSR issues
-        const pdfjs = await import("pdfjs-dist/webpack");
-
-        // Set the worker source (only in browser)
-        if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-          pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-        }
-
-        // Load PDF
-        const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
-
-        // Get the first page
-        const page = await pdf.getPage(1);
-
-        // Scale the page to a reasonable size for OCR (too high resolution can cause issues)
-        // Default is 1.5x scale which provides good quality while keeping size manageable
-        const scale = 1.5;
-        const viewport = page.getViewport({ scale });
-
-        // Create a canvas to render the page
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        // Render the page
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
-
-        await page.render(renderContext).promise;
-
-        // Convert canvas to base64 (JPEG format for better compression, quality 0.8 for balance)
-        const imageData = canvas.toDataURL("image/jpeg", 0.8);
-
-        return imageData;
-      } catch (pdfError) {
-        console.error("PDF.js import/usage error:", pdfError);
-        throw new Error(`PDF.js error: ${pdfError.message}`);
-      }
-    } else {
-      throw new Error(
-        "PDF conversion is only supported in browser environments"
-      );
-    }
-  } catch (error) {
-    console.error("PDF conversion error details:", error);
-    throw new Error(`PDF conversion failed: ${error.message}`);
   }
 };
 

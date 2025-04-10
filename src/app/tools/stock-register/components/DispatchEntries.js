@@ -352,8 +352,8 @@ const DispatchEntries = () => {
   };
 
   return (
-    <div className="dashboard-panel">
-      <div className="dashboard-panel-header">
+    <div className=" ">
+      {/* <div className="dashboard-panel-header">
         <div className="panel-title">Dispatch Entries</div>
         <div className="date-selector">
           <label htmlFor="date">
@@ -368,7 +368,7 @@ const DispatchEntries = () => {
             required
           />
         </div>
-      </div>
+      </div> */}
 
       {entitiesLoading ? (
         <div className="content-loading">
@@ -376,7 +376,7 @@ const DispatchEntries = () => {
           <p>Loading data...</p>
         </div>
       ) : (
-        <div className="entries-container">
+        <div className=" ">
           {/* PDF Upload Section */}
           <div className="pdf-upload-section">
             <h3>Upload Invoice PDF</h3>
@@ -532,74 +532,6 @@ const DispatchEntries = () => {
               </button>
             </div>
           </form>
-
-          {/* Recent Entries Table */}
-          <div className="recent-entries">
-            <h3>
-              Dispatch Entries for{" "}
-              {date
-                ? new Date(date).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })
-                : "Selected Date"}
-            </h3>
-
-            {!date ? (
-              <div className="empty-cell">
-                <p>Please select a date to view entries</p>
-              </div>
-            ) : fetchingEntries ? (
-              <div className="loading-cell">
-                <div className="loading-spinner-small"></div>
-                <span>Loading entries...</span>
-              </div>
-            ) : recentEntries.length > 0 ? (
-              <div className="entries-table-container">
-                <table className="entries-table">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Product</th>
-                      <th>Quantity (MT)</th>
-                      <th>Truck No.</th>
-                      <th>Invoice No.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentEntries.map((entry) => (
-                      <tr key={entry.id} className="data-row">
-                        <td>{new Date(entry.date).toLocaleTimeString()}</td>
-                        <td>
-                          <div className="cell-content">
-                            <div className="primary-text">
-                              {entry.product.technicalName} (
-                              {entry.product.commonName})
-                            </div>
-                          </div>
-                        </td>
-                        <td>{entry.quantity.toFixed(2)}</td>
-                        <td>{entry.truckNumber}</td>
-                        <td>{entry.invoiceNumber}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="empty-cell">
-                <p>
-                  No entries found for{" "}
-                  {new Date(date).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </p>
-              </div>
-            )}
-          </div>
         </div>
       )}
 
