@@ -405,6 +405,7 @@ const IncomingEntries = () => {
             <table className="entries-table">
               <thead>
                 <tr>
+                  <th style={{ width: "5%" }}>SN</th>
                   <th style={{ width: "25%" }}>
                     Product <span className="required">*</span>
                   </th>
@@ -426,6 +427,7 @@ const IncomingEntries = () => {
               <tbody>
                 {/* Form row */}
                 <tr className="form-row">
+                  <td></td>
                   <td>
                     <div className="cell-input" ref={productDropdownRef}>
                       <div className="searchable-dropdown">
@@ -577,7 +579,7 @@ const IncomingEntries = () => {
                             selectedBagType
                               ? `${selectedBagType.name}${
                                   selectedBagType.capacity
-                                    ? ` (${selectedBagType.capacity} kgs)`
+                                    ? ` (${selectedBagType.capacity} MT)`
                                     : ""
                                 }`
                               : bagTypeSearchTerm
@@ -614,7 +616,7 @@ const IncomingEntries = () => {
                                   </div>
                                   {bagType.capacity && (
                                     <div className="item-details">
-                                      {bagType.capacity} kgs
+                                      {bagType.capacity} MT
                                     </div>
                                   )}
                                 </div>
@@ -647,26 +649,27 @@ const IncomingEntries = () => {
 
                 {/* Separator */}
                 <tr className="separator-row">
-                  <td colSpan="7"></td>
+                  <td colSpan="8"></td>
                 </tr>
 
                 {/* Data rows */}
                 {!date ? (
                   <tr>
-                    <td colSpan="7" className="empty-cell">
+                    <td colSpan="8" className="empty-cell">
                       Please select a date to view entries
                     </td>
                   </tr>
                 ) : fetchingEntries ? (
                   <tr>
-                    <td colSpan="7" className="loading-cell">
+                    <td colSpan="8" className="loading-cell">
                       <div className="loading-spinner-small"></div>
                       <span>Loading entries...</span>
                     </td>
                   </tr>
                 ) : recentEntries.length > 0 ? (
-                  recentEntries.map((entry) => (
+                  recentEntries.map((entry, index) => (
                     <tr key={entry.id} className="data-row">
+                      <td>{index + 1}</td>
                       <td>
                         <div className="cell-content">
                           <div
@@ -674,7 +677,12 @@ const IncomingEntries = () => {
                             style={{ position: "relative" }}
                           >
                             {entry.potentialDuplicate && (
-                              <span style={{ color: "#d32f2f" }}>#</span>
+                              <span
+                                title="Potential Duplicate"
+                                style={{ color: "#d32f2f", cursor: "default" }}
+                              >
+                                #&nbsp;
+                              </span>
                             )}
                             {entry.product.technicalName} (
                             {entry.product.commonName})
@@ -690,7 +698,7 @@ const IncomingEntries = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="7" className="empty-cell">
+                    <td colSpan="8" className="empty-cell">
                       No entries found for{" "}
                       {new Date(date).toLocaleDateString("en-US", {
                         year: "numeric",

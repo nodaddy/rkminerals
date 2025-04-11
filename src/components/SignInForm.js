@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAppContext } from "../context/AppContext";
 import Button from "./Button";
+import { FiMail, FiLock } from "react-icons/fi";
 
 const SignInForm = () => {
   const { login, authError, setAuthError, loading } = useAppContext();

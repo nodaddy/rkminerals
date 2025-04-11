@@ -92,6 +92,7 @@ export default function StockRegister() {
             <div className="dashboard-title">
               {activeSection === "dashboard" && "Dashboard"}
               {activeSection === "inventory" && "Stock Register"}
+              {activeSection === "summary" && "Summary"}
               {activeSection === "incoming" && "Incoming Entries"}
               {activeSection === "production" && "Production Entries"}
               {activeSection === "dispatch" && "Dispatch Entries"}

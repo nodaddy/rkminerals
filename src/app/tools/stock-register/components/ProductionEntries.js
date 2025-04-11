@@ -391,6 +391,7 @@ const ProductionEntries = () => {
             <table className="entries-table">
               <thead>
                 <tr>
+                  <th style={{ width: "5%" }}>SN</th>
                   <th style={{ width: "25%" }}>
                     Product <span className="required">*</span>
                   </th>
@@ -409,6 +410,7 @@ const ProductionEntries = () => {
               <tbody>
                 {/* Form row */}
                 <tr className="form-row">
+                  <td></td>
                   <td>
                     <div className="cell-input" ref={productDropdownRef}>
                       <div className="searchable-dropdown">
@@ -545,7 +547,7 @@ const ProductionEntries = () => {
                             selectedBagType
                               ? `${selectedBagType.name}${
                                   selectedBagType.capacity
-                                    ? ` (${selectedBagType.capacity} kgs)`
+                                    ? ` (${selectedBagType.capacity} MT)`
                                     : ""
                                 }`
                               : bagTypeSearchTerm
@@ -582,7 +584,7 @@ const ProductionEntries = () => {
                                   </div>
                                   {bagType.capacity && (
                                     <div className="item-details">
-                                      {bagType.capacity} kgs
+                                      {bagType.capacity} MT
                                     </div>
                                   )}
                                 </div>
@@ -615,26 +617,27 @@ const ProductionEntries = () => {
 
                 {/* Separator */}
                 <tr className="separator-row">
-                  <td colSpan="5"></td>
+                  <td colSpan="6"></td>
                 </tr>
 
                 {/* Data rows */}
                 {!date ? (
                   <tr>
-                    <td colSpan="5" className="empty-cell">
+                    <td colSpan="6" className="empty-cell">
                       Please select a date to view entries
                     </td>
                   </tr>
                 ) : fetchingEntries ? (
                   <tr>
-                    <td colSpan="5" className="loading-cell">
+                    <td colSpan="6" className="loading-cell">
                       <div className="loading-spinner-small"></div>
                       <span>Loading entries...</span>
                     </td>
                   </tr>
                 ) : recentEntries.length > 0 ? (
-                  recentEntries.map((entry) => (
+                  recentEntries.map((entry, index) => (
                     <tr key={entry.id} className="data-row">
+                      <td>{index + 1}</td>
                       <td>
                         <div className="cell-content">
                           <div
@@ -642,7 +645,7 @@ const ProductionEntries = () => {
                             style={{ position: "relative" }}
                           >
                             {entry.potentialDuplicate && (
-                              <span style={{ color: "#d32f2f" }}>#</span>
+                              <span style={{ color: "#d32f2f" }}>#&nbsp;</span>
                             )}
                             {entry.product.technicalName} (
                             {entry.product.commonName})
@@ -657,7 +660,7 @@ const ProductionEntries = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="empty-cell">
+                    <td colSpan="6" className="empty-cell">
                       No entries found for{" "}
                       {new Date(date).toLocaleDateString("en-US", {
                         year: "numeric",

@@ -13,20 +13,13 @@ import {
 import app from "../../../../firebase/config";
 import { useAppContext } from "../../../../context/AppContext";
 import { useNotification } from "../../../../context/NotificationContext";
+import AppIcons from "../../../../components/AppIcons";
 
 const db = getFirestore(app);
 
-// Trash icon SVG component
+// Using AppIcons instead of direct import
 const TrashIcon = () => {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className={styles["trash-icon"]}
-      viewBox="0 0 24 24"
-    >
-      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6" />
-    </svg>
-  );
+  return <AppIcons.Trash className={styles["trash-icon"]} />;
 };
 
 const Admin = () => {

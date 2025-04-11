@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppContext } from "../../context/AppContext";
 import styles from "../page.module.css";
+import AppIcons from "@/components/AppIcons";
 
 export default function Dashboard() {
   const { isLoggedIn, user, logout, loading } = useAppContext();
@@ -31,7 +32,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
+    <div className="dashboard-container">
       <main
         style={{
           display: "flex",
@@ -39,11 +40,25 @@ export default function Dashboard() {
           alignItems: "flex-start",
           height: "100vh",
           paddingTop: "60px",
+          position: "relative",
+          zIndex: "1",
         }}
       >
         <div className="tools-container">
-          <h2>RK Minerals Tools</h2>
-          <p className="tools-intro">Select a tool to get started</p>
+          <h2>
+            <span
+              style={{
+                color: "white",
+                backgroundColor: "var(--primary)",
+                padding: "4px 8px",
+                borderRadius: "6px",
+              }}
+            >
+              RK Minerals
+            </span>{" "}
+            <span style={{ fontWeight: "400" }}>&nbsp;Applications Suite</span>
+          </h2>
+          <p className="tools-intro">Select an application to get started</p>
 
           <div className="tools-grid">
             <div
@@ -73,11 +88,52 @@ export default function Dashboard() {
                 Manage your inventory and stock levels
               </div>
             </div>
+
+            <div
+              style={{
+                border: "0px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                borderRadius: "50%",
+                position: "absolute",
+                backgroundColor: "white",
+                padding: "20px",
+                bottom: "40px",
+                right: "40px",
+              }}
+              onClick={() => {
+                alert(
+                  "Kindly email us your requirements at support@nexonware.com"
+                );
+              }}
+            >
+              <AppIcons.Add
+                style={{
+                  width: "50px",
+                  height: "50px",
+                  color: "var(--primary)",
+                }}
+              />
+            </div>
           </div>
         </div>
       </main>
 
       <style jsx>{`
+        .dashboard-container {
+          position: relative;
+          width: 100%;
+          min-height: 100vh;
+          background: linear-gradient(
+            135deg,
+            white 50%,
+            var(--primary-light, #e6f3ff) 50%
+          );
+        }
+
         .header {
           display: flex;
           justify-content: space-between;
@@ -111,11 +167,8 @@ export default function Dashboard() {
         }
 
         .tools-container {
-          width: 100%;
-          padding: 40px;
-          border-radius: 12px;
-          max-width: 1000px;
-          background-color: white;
+          min-width: 100vw;
+          padding: 0px 40px;
         }
 
         h2 {
