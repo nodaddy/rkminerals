@@ -39,6 +39,11 @@ const Summary = () => {
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  // Date selection state
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
+  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+
   // Monthly insights state
   const [monthlyInsights, setMonthlyInsights] = useState({
     dispatch: [],
@@ -48,13 +53,12 @@ const Summary = () => {
     error: null,
   });
 
-  // Get current month date range (first day to last day)
-  const getCurrentMonthRange = () => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Get month date range for the selected month (first day to last day)
+  const getSelectedMonthRange = () => {
+    const firstDay = new Date(selectedYear, selectedMonth, 1);
     const lastDay = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
+      selectedYear,
+      selectedMonth + 1,
       0,
       23,
       59,
@@ -184,11 +188,11 @@ const Summary = () => {
     if (!companyId) return [];
 
     try {
-      const dateRange = getCurrentMonthRange();
+      const dateRange = getSelectedMonthRange();
       const companyRef = doc(db, "companies", companyId);
       const dispatchCollectionRef = collection(companyRef, "dispatchEntries");
 
-      // Query dispatch entries for current month
+      // Query dispatch entries for selected month
       const dispatchQuery = query(
         dispatchCollectionRef,
         where("date", ">=", Timestamp.fromDate(dateRange.start)),
@@ -234,14 +238,14 @@ const Summary = () => {
     if (!companyId) return [];
 
     try {
-      const dateRange = getCurrentMonthRange();
+      const dateRange = getSelectedMonthRange();
       const companyRef = doc(db, "companies", companyId);
       const productionCollectionRef = collection(
         companyRef,
         "productionEntries"
       );
 
-      // Query production entries for current month
+      // Query production entries for selected month
       const productionQuery = query(
         productionCollectionRef,
         where("date", ">=", Timestamp.fromDate(dateRange.start)),
@@ -293,11 +297,11 @@ const Summary = () => {
     if (!companyId) return [];
 
     try {
-      const dateRange = getCurrentMonthRange();
+      const dateRange = getSelectedMonthRange();
       const companyRef = doc(db, "companies", companyId);
       const incomingCollectionRef = collection(companyRef, "incomingEntries");
 
-      // Query incoming entries for current month
+      // Query incoming entries for selected month
       const incomingQuery = query(
         incomingCollectionRef,
         where("date", ">=", Timestamp.fromDate(dateRange.start)),
@@ -349,10 +353,27 @@ const Summary = () => {
         fetchMonthlyIncoming(),
       ]);
 
+      // Calculate totals for each category
+      const incomingTotal = incomingData.reduce(
+        (sum, item) => sum + parseFloat(item.totalQuantity),
+        0
+      );
+      const productionTotal = productionData.reduce(
+        (sum, item) => sum + parseFloat(item.totalQuantity),
+        0
+      );
+      const dispatchTotal = dispatchData.reduce(
+        (sum, item) => sum + parseFloat(item.totalQuantity),
+        0
+      );
+
       setMonthlyInsights({
         dispatch: dispatchData,
         production: productionData,
         incoming: incomingData,
+        incomingTotal,
+        productionTotal,
+        dispatchTotal,
         loading: false,
         error: null,
       });
@@ -371,10 +392,47 @@ const Summary = () => {
     fetchAllMonthlyInsights();
   }, [companyId, products]);
 
+  // Fetch new insights when selected month changes
+  useEffect(() => {
+    if (companyId) {
+      fetchAllMonthlyInsights();
+    }
+  }, [selectedMonth, selectedYear, companyId]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     fetchProductStock();
     fetchAllMonthlyInsights();
+  };
+
+  // Change month handler
+  const handleMonthChange = (e) => {
+    setSelectedMonth(parseInt(e.target.value));
+  };
+
+  // Change year handler
+  const handleYearChange = (e) => {
+    setSelectedYear(parseInt(e.target.value));
+  };
+
+  // Previous month handler
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+
+  // Next month handler
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
   };
 
   // Format date to a readable format
@@ -393,6 +451,31 @@ const Summary = () => {
   const formatQuantity = (quantity) => {
     return parseFloat(quantity).toFixed(2);
   };
+
+  // Generate a list of last 5 years and next 5 years for the year selector
+  const generateYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+      years.push(i);
+    }
+    return years;
+  };
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
   return (
     <div className="dashboard-panel">
@@ -676,22 +759,84 @@ const Summary = () => {
 
         {/* Monthly Insights Section */}
         <div className="monthly-insights-section">
-          <h3 className="section-title">
-            Monthly Insights{" "}
-            <span className="current-month">
-              (
-              {new Date().toLocaleString("default", {
-                month: "long",
-                year: "numeric",
-              })}
-              )
-            </span>
-          </h3>
+          <div className="insights-header">
+            <h3 className="section-title">Monthly Summary</h3>
+
+            <div className="month-picker">
+              <button
+                className="month-nav-btn"
+                onClick={handlePrevMonth}
+                aria-label="Previous month"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  width="16"
+                  height="16"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+
+              <div className="month-select-container">
+                <select
+                  value={selectedMonth}
+                  onChange={handleMonthChange}
+                  className="month-select"
+                  aria-label="Select month"
+                >
+                  {monthNames.map((month, index) => (
+                    <option key={`month-${index}`} value={index}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedYear}
+                  onChange={handleYearChange}
+                  className="year-select"
+                  aria-label="Select year"
+                >
+                  {generateYearOptions().map((year) => (
+                    <option key={`year-${year}`} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                className="month-nav-btn"
+                onClick={handleNextMonth}
+                aria-label="Next month"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  width="16"
+                  height="16"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
 
           {monthlyInsights.loading ? (
             <div className="insights-loading">
               <div className="loading-spinner small"></div>
-              <span>Loading monthly insights...</span>
+              <span>Loading...</span>
             </div>
           ) : monthlyInsights.error ? (
             <div className="insights-error">
@@ -716,7 +861,14 @@ const Summary = () => {
                     <polyline points="8 12 12 16 16 12"></polyline>
                     <line x1="12" y1="8" x2="12" y2="16"></line>
                   </svg>
-                  <h4>Incoming</h4>
+                  <h4>
+                    Incoming
+                    {monthlyInsights.incomingTotal > 0 && (
+                      <span className="total-badge">
+                        ({formatQuantity(monthlyInsights.incomingTotal)} MT)
+                      </span>
+                    )}
+                  </h4>
                 </div>
 
                 {monthlyInsights.incoming.length === 0 ? (
@@ -760,7 +912,14 @@ const Summary = () => {
                     <path d="M7 17v-7"></path>
                     <path d="M17 8a5 5 0 0 0-10 0"></path>
                   </svg>
-                  <h4>Production</h4>
+                  <h4>
+                    Production
+                    {monthlyInsights.productionTotal > 0 && (
+                      <span className="total-badge">
+                        ({formatQuantity(monthlyInsights.productionTotal)} MT)
+                      </span>
+                    )}
+                  </h4>
                 </div>
 
                 {monthlyInsights.production.length === 0 ? (
@@ -804,7 +963,14 @@ const Summary = () => {
                     <polyline points="16 12 12 8 8 12"></polyline>
                     <line x1="12" y1="16" x2="12" y2="8"></line>
                   </svg>
-                  <h4>Dispatch</h4>
+                  <h4>
+                    Dispatch
+                    {monthlyInsights.dispatchTotal > 0 && (
+                      <span className="total-badge">
+                        ({formatQuantity(monthlyInsights.dispatchTotal)} MT)
+                      </span>
+                    )}
+                  </h4>
                 </div>
 
                 {monthlyInsights.dispatch.length === 0 ? (
@@ -1215,6 +1381,15 @@ const Summary = () => {
           font-weight: 600;
           color: #374151;
           margin: 0;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .total-badge {
+          font-size: 0.75rem;
+          font-weight: 500;
+          color: #6b7280;
         }
 
         .insight-icon {
@@ -1434,6 +1609,74 @@ const Summary = () => {
 
         .show-all-button:hover {
           background-color: #e5e7eb;
+        }
+
+        /* Month Picker Styles */
+        .insights-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .month-picker {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background-color: var(--neutral-50);
+          border-radius: 6px;
+          padding: 4px;
+        }
+
+        .month-nav-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: none;
+          cursor: pointer;
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          color: var(--neutral-600);
+        }
+
+        .month-nav-btn:hover {
+          background-color: var(--neutral-100);
+          color: var(--neutral-800);
+        }
+
+        .month-select-container {
+          display: flex;
+          gap: 4px;
+        }
+
+        .month-select,
+        .year-select {
+          background: none;
+          border: none;
+          font-size: 14px;
+          padding: 4px 8px;
+          border-radius: 4px;
+          color: var(--neutral-800);
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .month-select:hover,
+        .year-select:hover {
+          background-color: var(--neutral-100);
+        }
+
+        .month-select:focus,
+        .year-select:focus {
+          outline: none;
+          box-shadow: 0 0 0 2px var(--primary-light);
+        }
+
+        /* Remove the current month display since we now have the picker */
+        .current-month {
+          display: none;
         }
       `}</style>
     </div>
