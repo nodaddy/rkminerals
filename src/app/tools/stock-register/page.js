@@ -14,6 +14,7 @@ import ProductionEntries from "./components/ProductionEntries";
 import DispatchEntries from "./components/DispatchEntries";
 import Audit from "./components/Audit";
 import Admin from "./components/Admin";
+import Bags from "./components/Bags";
 import Styles from "./components/Styles";
 
 export default function StockRegister() {
@@ -96,6 +97,7 @@ export default function StockRegister() {
               {activeSection === "incoming" && "Incoming Entries"}
               {activeSection === "production" && "Production Entries"}
               {activeSection === "dispatch" && "Dispatch Entries"}
+              {activeSection === "bags" && "Bags Inventory"}
               {activeSection === "audit" && "Audit"}
               {activeSection === "admin" && "Administration"}
             </div>
@@ -126,6 +128,7 @@ export default function StockRegister() {
           {activeSection === "incoming" && <IncomingEntries />}
           {activeSection === "production" && <ProductionEntries />}
           {activeSection === "dispatch" && <DispatchEntries />}
+          {activeSection === "bags" && <Bags />}
           {activeSection === "audit" && <Audit userRole={userRole} />}
           {activeSection === "admin" && userRole === "admin" && <Admin />}
         </div>

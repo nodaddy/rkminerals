@@ -294,6 +294,58 @@ const ProductionEntries = () => {
         );
       }
 
+      // 3. Update bag stock (subtract used bags)
+      if (selectedBagType && selectedBagType.capacity) {
+        const bagStockCollectionRef = collection(companyRef, "bagStock");
+
+        // Calculate number of bags used
+        const quantityMT = parseFloat(quantity);
+        const capacityMT = selectedBagType.capacity;
+        const bagsUsed = Math.ceil(quantityMT / capacityMT); // Rounding up to ensure enough bags
+
+        // Check if bag stock record exists
+        const bagStockQuery = query(
+          bagStockCollectionRef,
+          where("bagTypeId", "==", selectedBagType.id)
+        );
+
+        const bagQuerySnapshot = await getDocs(bagStockQuery);
+
+        if (!bagQuerySnapshot.empty) {
+          // Bag stock exists - update the existing document
+          const bagStockDoc = bagQuerySnapshot.docs[0];
+          const bagStockData = bagStockDoc.data();
+
+          // Calculate new quantity, ensuring it doesn't go below 0
+          const currentQuantity = bagStockData.availableQuantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - bagsUsed);
+
+          // Update available quantity
+          await updateDoc(doc(bagStockCollectionRef, bagStockDoc.id), {
+            availableQuantity: newQuantity,
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Updated bag stock for ${selectedBagType.name}: used ${bagsUsed} bags, new stock: ${newQuantity}`
+          );
+        } else {
+          // No bag stock record exists - create one with 0 quantity
+          // (This shouldn't typically happen as bags should be added to inventory first)
+          await addDoc(bagStockCollectionRef, {
+            bagTypeId: selectedBagType.id,
+            bagTypeName: selectedBagType.name,
+            capacity: selectedBagType.capacity,
+            availableQuantity: 0, // Start at 0 since we've used all available bags
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Created new bag stock record for ${selectedBagType.name} with 0 quantity (used ${bagsUsed} bags)`
+          );
+        }
+      }
+
       showSuccess("Production entry added successfully!");
 
       // Reset form fields except date

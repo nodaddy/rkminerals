@@ -69,6 +69,16 @@ const Sidebar = ({
         </div>
 
         <div
+          className={`menu-item ${activeSection === "bags" ? "active" : ""}`}
+          onClick={() => setActiveSection("bags")}
+        >
+          <span className="menu-item-icon">
+            <AppIcons.Box size={20} />
+          </span>
+          Bags
+        </div>
+
+        <div
           className={`menu-item ${activeSection === "audit" ? "active" : ""}`}
           onClick={() => setActiveSection("audit")}
         >

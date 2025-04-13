@@ -50,7 +50,10 @@ export default function DispatchEntries() {
   const [quantity, setQuantity] = useState("");
   const [truckNumber, setTruckNumber] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [selectedBagType, setSelectedBagType] = useState(null);
+
+  // State for manual entry
+  const [isManualEntry, setIsManualEntry] = useState(false);
+  const [manualEntryValid, setManualEntryValid] = useState(false);
 
   // Duplicate entry detection state
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
@@ -94,6 +97,12 @@ export default function DispatchEntries() {
     loadPdfJs();
   }, []);
 
+  // Initialize tab state
+  useEffect(() => {
+    // Explicitly set initial tab state to ensure active styling is applied
+    setIsManualEntry(false);
+  }, []);
+
   // Process the PDF automatically when a file is selected
   useEffect(() => {
     if (pdfFile && pdfJsLoaded && !processing) {
@@ -116,6 +125,27 @@ export default function DispatchEntries() {
       fetchLastInvoiceNumber();
     }
   }, [companyId]);
+
+  // Validate manual entry form
+  useEffect(() => {
+    if (isManualEntry) {
+      const isValid =
+        date &&
+        selectedProduct &&
+        quantity &&
+        parseFloat(quantity) > 0 &&
+        truckNumber &&
+        invoiceNumber;
+      setManualEntryValid(isValid);
+    }
+  }, [
+    isManualEntry,
+    date,
+    selectedProduct,
+    quantity,
+    truckNumber,
+    invoiceNumber,
+  ]);
 
   // Fetch entries for selected date
   const fetchEntriesByDate = async (selectedDate) => {
@@ -234,7 +264,7 @@ export default function DispatchEntries() {
         return;
       }
 
-      // Find the full product and bag type details from the extracted data
+      // Find product detail
       let productDetail = null;
       if (typeof data.product === "string") {
         // Find product by name
@@ -256,8 +286,7 @@ export default function DispatchEntries() {
       }
 
       // Use selected bag type or default to the first one
-      const bagTypeDetail = selectedBagType ||
-        bagTypes[0] || { id: "unknown", name: "Unknown" };
+      const bagTypeDetail = { id: "unknown", name: "Unknown" };
 
       // Prepare the entry data
       const entryData = {
@@ -270,11 +299,6 @@ export default function DispatchEntries() {
         quantity: parseFloat(data.quantity),
         truckNumber: data.truckNumber,
         invoiceNumber: data.invoiceNumber,
-        bagType: {
-          id: bagTypeDetail.id,
-          name: bagTypeDetail.name,
-          capacity: bagTypeDetail.capacity || null,
-        },
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
@@ -666,6 +690,25 @@ export default function DispatchEntries() {
     });
   };
 
+  // Handle manual entry submission
+  const handleManualSubmit = (e) => {
+    e.preventDefault();
+
+    if (!manualEntryValid) {
+      showError("Please fill all required fields");
+      return;
+    }
+
+    const entryData = {
+      product: selectedProduct,
+      quantity,
+      truckNumber,
+      invoiceNumber,
+    };
+
+    handleSaveToDatabase(entryData);
+  };
+
   return (
     <div
       style={{
@@ -682,6 +725,49 @@ export default function DispatchEntries() {
         <div
           style={{ maxWidth: "56rem", marginLeft: "auto", marginRight: "auto" }}
         >
+          {/* Tab Navigation */}
+          <div
+            style={{
+              display: "flex",
+              marginBottom: "1.5rem",
+              borderBottom: "1px solid #e5e7eb",
+            }}
+          >
+            <button
+              onClick={() => setIsManualEntry(false)}
+              className={`tab-button ${!isManualEntry ? "active-tab" : ""}`}
+              style={{
+                padding: "0.75rem 1.25rem",
+                fontWeight: "500",
+                fontSize: "0.95rem",
+                color: !isManualEntry ? "var(--primary, #ff4040)" : "#6b7280",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                marginRight: "1rem",
+              }}
+            >
+              Upload Invoice
+            </button>
+            <button
+              onClick={() => setIsManualEntry(true)}
+              className={`tab-button ${isManualEntry ? "active-tab" : ""}`}
+              style={{
+                padding: "0.75rem 1.25rem",
+                fontWeight: "500",
+                fontSize: "0.95rem",
+                color: isManualEntry ? "var(--primary, #ff4040)" : "#6b7280",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              Manual Entry
+            </button>
+          </div>
+
           {/* Previous Invoice Number Display */}
           {lastInvoiceNumber && (
             <div
@@ -750,205 +836,250 @@ export default function DispatchEntries() {
           {/* Clear floating elements */}
           <div style={{ clear: "both" }}></div>
 
-          {/* Upload Container */}
-          <div
-            style={{
-              background: "white",
-              borderRadius: "0.75rem",
-              boxShadow:
-                "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-              border: "1px solid #e5e7eb",
-              overflow: "hidden",
-            }}
-          >
-            {/* Header */}
+          {/* Manual Entry Form */}
+          {isManualEntry ? (
             <div
               style={{
-                display: "none",
-                background: "linear-gradient(to right, #4f46e5, #3b82f6)",
-                padding: "1rem 1.5rem",
+                background: "white",
+                borderRadius: "0.75rem",
+                boxShadow:
+                  "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                border: "1px solid #e5e7eb",
+                overflow: "hidden",
+                marginBottom: "2rem",
               }}
             >
-              <h2
-                style={{
-                  color: "white",
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  style={{ height: "1.25rem", width: "1.25rem" }}
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                  <path
-                    fillRule="evenodd"
-                    d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Extract Dispatch Information
-              </h2>
-              <p
-                style={{
-                  color: "#bfdbfe",
-                  fontSize: "0.875rem",
-                  marginTop: "0.25rem",
-                }}
-              >
-                Upload your dispatch PDF invoice to automatically extract key
-                information
-              </p>
-            </div>
-
-            {/* Content */}
-            <div style={{ padding: "1.5rem" }}>
-              {/* File Upload Section */}
               <div
                 style={{
-                  border: `2px dashed ${dragActive ? "#4f46e5" : "#d1d5db"}`,
-                  borderRadius: "0.75rem",
-                  padding: "2rem",
-                  textAlign: "center",
-                  cursor: "pointer",
-                  transition: "all 0.3s",
-                  backgroundColor: dragActive ? "#eff6ff" : "transparent",
-                  transform: dragActive ? "scale(1.02)" : "none",
-                  boxShadow: dragActive
-                    ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
-                    : "none",
+                  background: "linear-gradient(to right, #ff4040, #ff6b6b)",
+                  padding: "1rem 1.5rem",
                 }}
-                onClick={() => fileInputRef.current?.click()}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
               >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".pdf"
-                  style={{ display: "none" }}
-                />
+                <h2
+                  style={{
+                    color: "white",
+                    fontSize: "1.125rem",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    style={{ height: "1.25rem", width: "1.25rem" }}
+                  >
+                    <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
+                  </svg>
+                  Manual Dispatch Entry
+                </h2>
+              </div>
 
-                {!pdfFile ? (
-                  <div style={{ padding: "1.5rem 0" }}>
-                    <div
+              <form onSubmit={handleManualSubmit} style={{ padding: "1.5rem" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, 1fr)",
+                    gap: "1.5rem",
+                  }}
+                >
+                  {/* Date Field */}
+                  <div>
+                    <label
                       style={{
-                        margin: "0 auto",
-                        width: "4rem",
-                        height: "4rem",
-                        marginBottom: "1rem",
-                        backgroundColor: "#e0e7ff",
-                        color: "#4f46e5",
-                        borderRadius: "9999px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        style={{ height: "2rem", width: "2rem" }}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                    </div>
-                    <p
-                      style={{
-                        fontSize: "1.25rem",
+                        display: "block",
+                        fontSize: "0.875rem",
                         fontWeight: "500",
                         color: "#374151",
                         marginBottom: "0.5rem",
                       }}
                     >
-                      Drop a Dispatch Invoice PDF here
-                    </p>
-                    <p style={{ color: "#6b7280", marginBottom: "1rem" }}>
-                      or{" "}
-                      <span style={{ color: "#4f46e5", fontWeight: "500" }}>
-                        browse
-                      </span>{" "}
-                      to upload
-                    </p>
-
-                    <div
+                      Invoice Date <span style={{ color: "#ef4444" }}>*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.5rem",
+                        width: "100%",
+                        padding: "0.75rem",
+                        borderRadius: "0.375rem",
+                        border: "1px solid #d1d5db",
                         fontSize: "0.875rem",
-                        color: "#6b7280",
+                        color: "#1f2937",
+                        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                      }}
+                      required
+                    />
+                  </div>
+
+                  {/* Product Field */}
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#374151",
+                        marginBottom: "0.5rem",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          style={{
-                            height: "1rem",
-                            width: "1rem",
-                            marginRight: "0.25rem",
-                            color: "#4f46e5",
-                          }}
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        PDF format only
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          style={{
-                            height: "1rem",
-                            width: "1rem",
-                            marginRight: "0.25rem",
-                            color: "#4f46e5",
-                          }}
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        Auto-processed on upload
-                      </div>
-                    </div>
+                      Product <span style={{ color: "#ef4444" }}>*</span>
+                    </label>
+                    <select
+                      value={selectedProduct ? selectedProduct.id : ""}
+                      onChange={(e) => {
+                        const selected = products.find(
+                          (p) => p.id === e.target.value
+                        );
+                        setSelectedProduct(selected || null);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        borderRadius: "0.375rem",
+                        border: "1px solid #d1d5db",
+                        fontSize: "0.875rem",
+                        color: "#1f2937",
+                        backgroundColor: "white",
+                        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                      }}
+                      required
+                    >
+                      <option value="">Select a product</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.technicalName} ({product.commonName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                    {!pdfJsLoaded && (
-                      <div
-                        style={{
-                          marginTop: "1rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#d97706",
-                          gap: "0.5rem",
-                        }}
-                      >
+                  {/* Quantity Field */}
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#374151",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      Quantity (MT) <span style={{ color: "#ef4444" }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      min="0.01"
+                      step="0.01"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        borderRadius: "0.375rem",
+                        border: "1px solid #d1d5db",
+                        fontSize: "0.875rem",
+                        color: "#1f2937",
+                        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                      }}
+                      required
+                    />
+                  </div>
+
+                  {/* Truck Number Field */}
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#374151",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      Truck Number <span style={{ color: "#ef4444" }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={truckNumber}
+                      onChange={(e) => setTruckNumber(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        borderRadius: "0.375rem",
+                        border: "1px solid #d1d5db",
+                        fontSize: "0.875rem",
+                        color: "#1f2937",
+                        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                      }}
+                      required
+                    />
+                  </div>
+
+                  {/* Invoice Number Field */}
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#374151",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      Invoice Number <span style={{ color: "#ef4444" }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        borderRadius: "0.375rem",
+                        border: "1px solid #d1d5db",
+                        fontSize: "0.875rem",
+                        color: "#1f2937",
+                        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                      }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "2rem",
+                    display: "flex",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <button
+                    type="submit"
+                    disabled={!manualEntryValid || saving}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      backgroundColor: "var(--primary, #ff4040)",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      fontWeight: "600",
+                      cursor:
+                        manualEntryValid && !saving ? "pointer" : "not-allowed",
+                      opacity: manualEntryValid && !saving ? 1 : 0.7,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {saving ? (
+                      <>
                         <svg
                           style={{
                             animation: "spin 1s linear infinite",
@@ -973,311 +1104,366 @@ export default function DispatchEntries() {
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           ></path>
                         </svg>
-                        Initializing converter...
-                      </div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          style={{ height: "1rem", width: "1rem" }}
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        Save Dispatch Entry
+                      </>
                     )}
-                  </div>
-                ) : (
-                  <div style={{ padding: "1rem 0" }}>
-                    <div
-                      style={{
-                        margin: "0 auto",
-                        width: "3.5rem",
-                        height: "3.5rem",
-                        marginBottom: "0.75rem",
-                        backgroundColor: "#4f46e5",
-                        color: "white",
-                        borderRadius: "9999px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        style={{ height: "1.75rem", width: "1.75rem" }}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                    </div>
-                    <p
-                      style={{
-                        fontSize: "1.125rem",
-                        fontWeight: "500",
-                        color: "#4f46e5",
-                        textOverflow: "ellipsis",
-                        overflow: "hidden",
-                        whiteSpace: "nowrap",
-                        maxWidth: "24rem",
-                        marginLeft: "auto",
-                        marginRight: "auto",
-                      }}
-                      title={pdfFile.name}
-                    >
-                      {pdfFile.name}
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.75rem",
-                        marginTop: "0.5rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: "0 0.75rem",
-                          paddingTop: "0.25rem",
-                          paddingBottom: "0.25rem",
-                          backgroundColor: "#e0e7ff",
-                          color: "#4338ca",
-                          borderRadius: "9999px",
-                          fontSize: "0.75rem",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {pageCount} {pageCount === 1 ? "page" : "pages"}
-                      </div>
-                      <div
-                        style={{
-                          padding: "0 0.75rem",
-                          paddingTop: "0.25rem",
-                          paddingBottom: "0.25rem",
-                          backgroundColor: "#e0e7ff",
-                          color: "#4338ca",
-                          borderRadius: "9999px",
-                          fontSize: "0.75rem",
-                          fontWeight: "500",
-                        }}
-                      >
-                        {(pdfFile.size / (1024 * 1024)).toFixed(2)} MB
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPdfFile(null);
-                          setExtractedData(null);
-                          setShowConfirmation(false);
-                          setError("");
-                        }}
-                        style={{
-                          padding: "0 0.75rem",
-                          paddingTop: "0.25rem",
-                          paddingBottom: "0.25rem",
-                          backgroundColor: "#fee2e2",
-                          color: "#dc2626",
-                          borderRadius: "9999px",
-                          fontSize: "0.75rem",
-                          fontWeight: "500",
-                          transition: "background-color 0.3s",
-                        }}
-                        onMouseOver={(e) =>
-                          (e.currentTarget.style.backgroundColor = "#fecaca")
-                        }
-                        onMouseOut={(e) =>
-                          (e.currentTarget.style.backgroundColor = "#fee2e2")
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Status and Progress */}
-              {processing && (
-                <div
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            /* Upload Container - show only if not in manual entry mode */
+            <div
+              style={{
+                background: "white",
+                borderRadius: "0.75rem",
+                boxShadow:
+                  "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                border: "1px solid #e5e7eb",
+                overflow: "hidden",
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  background: "linear-gradient(to right, #ff4040, #ff6b6b)",
+                  padding: "1rem 1.5rem",
+                }}
+              >
+                <h2
                   style={{
-                    marginTop: "1.5rem",
-                    backgroundColor: "#eef2ff",
-                    borderRadius: "0.75rem",
-                    padding: "1.25rem",
-                    border: "1px solid #e0e7ff",
+                    color: "white",
+                    fontSize: "1.125rem",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                    }}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    style={{ height: "1.25rem", width: "1.25rem" }}
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginBottom: "0.75rem",
-                      }}
-                    >
-                      <div style={{ position: "relative" }}>
-                        <div
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path
+                      fillRule="evenodd"
+                      d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Extract Dispatch Information
+                </h2>
+                <p
+                  style={{
+                    color: "#ffe7e7",
+                    fontSize: "0.875rem",
+                    marginTop: "0.25rem",
+                  }}
+                >
+                  Upload your dispatch PDF invoice to automatically extract key
+                  information
+                </p>
+              </div>
+
+              {/* Upload Container */}
+              <div style={{ padding: "1.5rem" }}>
+                {/* File Upload Section */}
+                <div
+                  style={{
+                    border: `2px dashed ${
+                      dragActive ? "var(--primary, #ff4040)" : "#d1d5db"
+                    }`,
+                    borderRadius: "0.75rem",
+                    padding: "2rem",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    transition: "all 0.3s",
+                    backgroundColor: dragActive ? "#fff5f5" : "transparent",
+                    transform: dragActive ? "scale(1.02)" : "none",
+                    boxShadow: dragActive
+                      ? "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+                      : "none",
+                    margin: "1.5rem",
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".pdf"
+                    style={{ display: "none" }}
+                  />
+
+                  {!pdfFile ? (
+                    <div style={{ padding: "1.5rem 0" }}>
+                      <div
+                        style={{
+                          margin: "0 auto",
+                          width: "4rem",
+                          height: "4rem",
+                          marginBottom: "1rem",
+                          backgroundColor: "#ffe7e7",
+                          color: "var(--primary, #ff4040)",
+                          borderRadius: "9999px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          style={{ height: "2rem", width: "2rem" }}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: "1.25rem",
+                          fontWeight: "500",
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Drop a Dispatch Invoice PDF here
+                      </p>
+                      <p style={{ color: "#6b7280", marginBottom: "1rem" }}>
+                        or{" "}
+                        <span
                           style={{
-                            width: "3rem",
-                            height: "3rem",
-                            borderRadius: "9999px",
-                            border: "2px solid #c7d2fe",
-                          }}
-                        ></div>
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "3rem",
-                            height: "3rem",
+                            color: "var(--primary, #ff4040)",
+                            fontWeight: "500",
                           }}
                         >
-                          <div
+                          browse
+                        </span>{" "}
+                        to upload
+                      </p>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.875rem",
+                          color: "#6b7280",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
                             style={{
-                              width: "3rem",
-                              height: "3rem",
-                              borderRadius: "9999px",
-                              border: "2px solid #4f46e5",
-                              borderTopColor: "transparent",
-                              animation: "spin 1s linear infinite",
+                              height: "1rem",
+                              width: "1rem",
+                              marginRight: "0.25rem",
+                              color: "var(--primary, #ff4040)",
                             }}
-                          ></div>
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          PDF format only
                         </div>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            style={{
+                              height: "1rem",
+                              width: "1rem",
+                              marginRight: "0.25rem",
+                              color: "var(--primary, #ff4040)",
+                            }}
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Auto-processed on upload
+                        </div>
+                      </div>
+
+                      {!pdfJsLoaded && (
                         <div
                           style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "3rem",
-                            height: "3rem",
+                            marginTop: "1rem",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            color: "#4f46e5",
-                            fontWeight: "600",
-                            fontSize: "0.875rem",
+                            color: "#d97706",
+                            gap: "0.5rem",
                           }}
                         >
-                          {progress}%
+                          <svg
+                            style={{
+                              animation: "spin 1s linear infinite",
+                              height: "1rem",
+                              width: "1rem",
+                            }}
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              style={{ opacity: 0.25 }}
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              style={{ opacity: 0.75 }}
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Initializing converter...
                         </div>
-                      </div>
+                      )}
                     </div>
-                    <p
-                      style={{
-                        color: "#4338ca",
-                        fontWeight: "500",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
-                      Processing Invoice
-                    </p>
-                    <p
-                      style={{
-                        color: "#4f46e5",
-                        fontSize: "0.875rem",
-                        marginBottom: "0.75rem",
-                      }}
-                    >
-                      Please wait while we extract information from your
-                      document
-                    </p>
-                    <div
-                      style={{
-                        width: "100%",
-                        marginTop: "0.25rem",
-                        backgroundColor: "#c7d2fe",
-                        borderRadius: "9999px",
-                        height: "0.375rem",
-                        overflow: "hidden",
-                      }}
-                    >
+                  ) : (
+                    <div style={{ padding: "1rem 0" }}>
                       <div
                         style={{
-                          backgroundColor: "#4f46e5",
-                          height: "0.375rem",
+                          margin: "0 auto",
+                          width: "3.5rem",
+                          height: "3.5rem",
+                          marginBottom: "0.75rem",
+                          backgroundColor: "var(--primary, #ff4040)",
+                          color: "white",
                           borderRadius: "9999px",
-                          transition: "all 0.3s",
-                          width: `${progress}%`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <div
-                  style={{
-                    marginTop: "1.5rem",
-                    backgroundColor: "#fef2f2",
-                    borderRadius: "0.75rem",
-                    padding: "1.25rem",
-                    border: "1px solid #fee2e2",
-                    animation: "fade-in 0.3s ease-out forwards",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "flex-start" }}>
-                    <div style={{ flexShrink: 0 }}>
-                      <svg
-                        style={{
-                          height: "1.25rem",
-                          width: "1.25rem",
-                          color: "#ef4444",
-                        }}
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
                       >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div style={{ marginLeft: "0.75rem" }}>
-                      <h3
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          style={{ height: "1.75rem", width: "1.75rem" }}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                      <p
                         style={{
-                          fontSize: "0.875rem",
+                          fontSize: "1.125rem",
                           fontWeight: "500",
-                          color: "#991b1b",
+                          color: "var(--primary, #ff4040)",
+                          textOverflow: "ellipsis",
+                          overflow: "hidden",
+                          whiteSpace: "nowrap",
+                          maxWidth: "24rem",
+                          marginLeft: "auto",
+                          marginRight: "auto",
                         }}
+                        title={pdfFile.name}
                       >
-                        An error occurred
-                      </h3>
+                        {pdfFile.name}
+                      </p>
                       <div
                         style={{
-                          marginTop: "0.25rem",
-                          fontSize: "0.875rem",
-                          color: "#b91c1c",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.75rem",
+                          marginTop: "0.5rem",
                         }}
                       >
-                        {error}
-                      </div>
-                      <div style={{ marginTop: "0.75rem" }}>
-                        <button
-                          type="button"
-                          onClick={() => setError("")}
+                        <div
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
                             padding: "0 0.75rem",
-                            paddingTop: "0.375rem",
-                            paddingBottom: "0.375rem",
-                            border: "1px solid transparent",
+                            paddingTop: "0.25rem",
+                            paddingBottom: "0.25rem",
+                            backgroundColor: "#ffe7e7",
+                            color: "var(--primary-dark, #d62c2c)",
+                            borderRadius: "9999px",
                             fontSize: "0.75rem",
                             fontWeight: "500",
-                            borderRadius: "0.375rem",
-                            color: "#b91c1c",
+                          }}
+                        >
+                          {pageCount} {pageCount === 1 ? "page" : "pages"}
+                        </div>
+                        <div
+                          style={{
+                            padding: "0 0.75rem",
+                            paddingTop: "0.25rem",
+                            paddingBottom: "0.25rem",
+                            backgroundColor: "#ffe7e7",
+                            color: "var(--primary-dark, #d62c2c)",
+                            borderRadius: "9999px",
+                            fontSize: "0.75rem",
+                            fontWeight: "500",
+                          }}
+                        >
+                          {(pdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPdfFile(null);
+                            setExtractedData(null);
+                            setShowConfirmation(false);
+                            setError("");
+                          }}
+                          style={{
+                            padding: "0 0.75rem",
+                            paddingTop: "0.25rem",
+                            paddingBottom: "0.25rem",
                             backgroundColor: "#fee2e2",
-                            cursor: "pointer",
+                            color: "#dc2626",
+                            borderRadius: "9999px",
+                            fontSize: "0.75rem",
+                            fontWeight: "500",
+                            transition: "background-color 0.3s",
                           }}
                           onMouseOver={(e) =>
                             (e.currentTarget.style.backgroundColor = "#fecaca")
@@ -1286,15 +1472,189 @@ export default function DispatchEntries() {
                             (e.currentTarget.style.backgroundColor = "#fee2e2")
                           }
                         >
-                          Dismiss
+                          Remove
                         </button>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+
+                {/* Status and Progress */}
+                {processing && (
+                  <div
+                    style={{
+                      marginTop: "1.5rem",
+                      backgroundColor: "#fff5f5",
+                      borderRadius: "0.75rem",
+                      padding: "1.25rem",
+                      border: "1px solid #fee2e2",
+                      margin: "0 1.5rem 1.5rem 1.5rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginBottom: "0.75rem",
+                        }}
+                      >
+                        <div style={{ position: "relative" }}>
+                          <div
+                            style={{
+                              width: "3rem",
+                              height: "3rem",
+                              borderRadius: "9999px",
+                              border: "2px solid #fecaca",
+                            }}
+                          ></div>
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "3rem",
+                              height: "3rem",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "3rem",
+                                height: "3rem",
+                                borderRadius: "9999px",
+                                border: "2px solid var(--primary, #ff4040)",
+                                borderTopColor: "transparent",
+                                animation: "spin 1s linear infinite",
+                              }}
+                            ></div>
+                          </div>
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              width: "3rem",
+                              height: "3rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "var(--primary, #ff4040)",
+                              fontWeight: "600",
+                              fontSize: "0.875rem",
+                            }}
+                          >
+                            {/* {progress}% */}
+                          </div>
+                        </div>
+                      </div>
+                      <p
+                        style={{
+                          color: "var(--primary-dark, #d62c2c)",
+                          fontWeight: "500",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Processing Invoice
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                  <div
+                    style={{
+                      marginTop: "1.5rem",
+                      backgroundColor: "#fef2f2",
+                      borderRadius: "0.75rem",
+                      padding: "1.25rem",
+                      border: "1px solid #fee2e2",
+                      animation: "fade-in 0.3s ease-out forwards",
+                      margin: "0 1.5rem 1.5rem 1.5rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start" }}>
+                      <div style={{ flexShrink: 0 }}>
+                        <svg
+                          style={{
+                            height: "1.25rem",
+                            width: "1.25rem",
+                            color: "#ef4444",
+                          }}
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <div style={{ marginLeft: "0.75rem" }}>
+                        <h3
+                          style={{
+                            fontSize: "0.875rem",
+                            fontWeight: "500",
+                            color: "#991b1b",
+                          }}
+                        >
+                          An error occurred
+                        </h3>
+                        <div
+                          style={{
+                            marginTop: "0.25rem",
+                            fontSize: "0.875rem",
+                            color: "#b91c1c",
+                          }}
+                        >
+                          {error}
+                        </div>
+                        <div style={{ marginTop: "0.75rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setError("")}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "0 0.75rem",
+                              paddingTop: "0.375rem",
+                              paddingBottom: "0.375rem",
+                              border: "1px solid transparent",
+                              fontSize: "0.75rem",
+                              fontWeight: "500",
+                              borderRadius: "0.375rem",
+                              color: "#b91c1c",
+                              backgroundColor: "#fee2e2",
+                              cursor: "pointer",
+                            }}
+                            onMouseOver={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#fecaca")
+                            }
+                            onMouseOut={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "#fee2e2")
+                            }
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -1330,7 +1690,8 @@ export default function DispatchEntries() {
           >
             <div
               style={{
-                background: "linear-gradient(to right, #4f46e5, #6366f1)",
+                background:
+                  "linear-gradient(to right, var(--primary, #ff4040), var(--primary-light, #ff6b6b))",
                 padding: "1rem 1.5rem",
                 display: "flex",
                 justifyContent: "space-between",
@@ -1343,23 +1704,53 @@ export default function DispatchEntries() {
                   fontSize: "1.125rem",
                   fontWeight: "600",
                   color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
                 }}
               >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  style={{ height: "1.25rem", width: "1.25rem" }}
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M9 1.5H5.625c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5zm6.61 10.936a.75.75 0 10-1.22.872l1.5 2.1a.75.75 0 001.164.114l3.75-4.5a.75.75 0 10-1.154-.96l-3.089 3.708-1.951-2.334z"
+                    clipRule="evenodd"
+                  />
+                </svg>
                 Confirm Dispatch Entry
               </h3>
               <button
                 onClick={() => setShowConfirmation(false)}
                 style={{
-                  backgroundColor: "transparent",
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
                   border: "none",
                   color: "white",
                   cursor: "pointer",
                   padding: "0.25rem",
+                  borderRadius: "9999px",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background-color 0.2s",
                 }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "rgba(255, 255, 255, 0.2)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "rgba(255, 255, 255, 0.1)")
+                }
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  style={{ height: "1.5rem", width: "1.5rem" }}
+                  style={{ height: "1.25rem", width: "1.25rem" }}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1391,19 +1782,46 @@ export default function DispatchEntries() {
                   overflowY: "auto",
                 }}
               >
-                <p
+                <div
                   style={{
-                    fontSize: "0.875rem",
-                    color: "#4b5563",
-                    marginBottom: "1rem",
+                    backgroundColor: "#f9fafb",
+                    borderRadius: "0.5rem",
+                    padding: "0.75rem 1rem",
+                    marginBottom: "1.5rem",
+                    border: "1px solid #e5e7eb",
                   }}
                 >
-                  We've extracted the following information from your invoice.
-                  Please review and make any necessary corrections before
-                  saving.
-                </p>
+                  <p
+                    style={{
+                      fontSize: "0.875rem",
+                      color: "#4b5563",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      style={{
+                        height: "1rem",
+                        width: "1rem",
+                        color: "var(--primary, #ff4040)",
+                      }}
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Please review the extracted information and make any
+                    necessary corrections before saving.
+                  </p>
+                </div>
 
-                <div style={{ display: "grid", gap: "1rem" }}>
+                <div style={{ display: "grid", gap: "1.25rem" }}>
                   {/* Date Field */}
                   <div>
                     <label
@@ -1412,7 +1830,7 @@ export default function DispatchEntries() {
                         fontSize: "0.875rem",
                         fontWeight: "500",
                         color: "#374151",
-                        marginBottom: "0.25rem",
+                        marginBottom: "0.375rem",
                       }}
                     >
                       Invoice Date <span style={{ color: "#ef4444" }}>*</span>
@@ -1423,11 +1841,12 @@ export default function DispatchEntries() {
                       onChange={(e) => setDate(e.target.value)}
                       style={{
                         width: "100%",
-                        padding: "0.5rem 0.75rem",
+                        padding: "0.625rem 0.75rem",
                         borderRadius: "0.375rem",
                         border: "1px solid #d1d5db",
                         fontSize: "0.875rem",
                         color: "#1f2937",
+                        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                       }}
                       required
                     />
@@ -1441,7 +1860,7 @@ export default function DispatchEntries() {
                         fontSize: "0.875rem",
                         fontWeight: "500",
                         color: "#374151",
-                        marginBottom: "0.25rem",
+                        marginBottom: "0.375rem",
                       }}
                     >
                       Product <span style={{ color: "#ef4444" }}>*</span>
@@ -1456,12 +1875,13 @@ export default function DispatchEntries() {
                       }}
                       style={{
                         width: "100%",
-                        padding: "0.5rem 0.75rem",
+                        padding: "0.625rem 0.75rem",
                         borderRadius: "0.375rem",
                         border: "1px solid #d1d5db",
                         fontSize: "0.875rem",
                         color: "#1f2937",
                         backgroundColor: "white",
+                        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                       }}
                       required
                     >
@@ -1482,7 +1902,7 @@ export default function DispatchEntries() {
                         fontSize: "0.875rem",
                         fontWeight: "500",
                         color: "#374151",
-                        marginBottom: "0.25rem",
+                        marginBottom: "0.375rem",
                       }}
                     >
                       Quantity (MT) <span style={{ color: "#ef4444" }}>*</span>
@@ -1495,11 +1915,12 @@ export default function DispatchEntries() {
                       step="0.01"
                       style={{
                         width: "100%",
-                        padding: "0.5rem 0.75rem",
+                        padding: "0.625rem 0.75rem",
                         borderRadius: "0.375rem",
                         border: "1px solid #d1d5db",
                         fontSize: "0.875rem",
                         color: "#1f2937",
+                        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                       }}
                       required
                     />
@@ -1513,7 +1934,7 @@ export default function DispatchEntries() {
                         fontSize: "0.875rem",
                         fontWeight: "500",
                         color: "#374151",
-                        marginBottom: "0.25rem",
+                        marginBottom: "0.375rem",
                       }}
                     >
                       Truck Number <span style={{ color: "#ef4444" }}>*</span>
@@ -1524,11 +1945,12 @@ export default function DispatchEntries() {
                       onChange={(e) => setTruckNumber(e.target.value)}
                       style={{
                         width: "100%",
-                        padding: "0.5rem 0.75rem",
+                        padding: "0.625rem 0.75rem",
                         borderRadius: "0.375rem",
                         border: "1px solid #d1d5db",
                         fontSize: "0.875rem",
                         color: "#1f2937",
+                        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                       }}
                       required
                     />
@@ -1542,7 +1964,7 @@ export default function DispatchEntries() {
                         fontSize: "0.875rem",
                         fontWeight: "500",
                         color: "#374151",
-                        marginBottom: "0.25rem",
+                        marginBottom: "0.375rem",
                       }}
                     >
                       Invoice Number <span style={{ color: "#ef4444" }}>*</span>
@@ -1553,11 +1975,12 @@ export default function DispatchEntries() {
                       onChange={(e) => setInvoiceNumber(e.target.value)}
                       style={{
                         width: "100%",
-                        padding: "0.5rem 0.75rem",
+                        padding: "0.625rem 0.75rem",
                         borderRadius: "0.375rem",
                         border: "1px solid #d1d5db",
                         fontSize: "0.875rem",
                         color: "#1f2937",
+                        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                       }}
                       required
                     />
@@ -1570,12 +1993,14 @@ export default function DispatchEntries() {
                     justifyContent: "flex-end",
                     gap: "0.75rem",
                     marginTop: "1.5rem",
+                    borderTop: "1px solid #e5e7eb",
+                    paddingTop: "1.5rem",
                   }}
                 >
                   <button
                     onClick={() => setShowConfirmation(false)}
                     style={{
-                      padding: "0.5rem 1rem",
+                      padding: "0.625rem 1.25rem",
                       backgroundColor: "#f3f4f6",
                       color: "#374151",
                       border: "none",
@@ -1583,6 +2008,7 @@ export default function DispatchEntries() {
                       fontSize: "0.875rem",
                       fontWeight: "500",
                       cursor: "pointer",
+                      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                     }}
                     onMouseOver={(e) =>
                       (e.currentTarget.style.backgroundColor = "#e5e7eb")
@@ -1604,8 +2030,8 @@ export default function DispatchEntries() {
                     }
                     disabled={saving}
                     style={{
-                      padding: "0.5rem 1rem",
-                      backgroundColor: "#4f46e5",
+                      padding: "0.625rem 1.25rem",
+                      backgroundColor: "var(--primary, #ff4040)",
                       color: "white",
                       border: "none",
                       borderRadius: "0.375rem",
@@ -1616,14 +2042,17 @@ export default function DispatchEntries() {
                       display: "flex",
                       alignItems: "center",
                       gap: "0.5rem",
+                      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                     }}
                     onMouseOver={(e) => {
                       if (!saving)
-                        e.currentTarget.style.backgroundColor = "#4338ca";
+                        e.currentTarget.style.backgroundColor =
+                          "var(--primary-dark, #d62c2c)";
                     }}
                     onMouseOut={(e) => {
                       if (!saving)
-                        e.currentTarget.style.backgroundColor = "#4f46e5";
+                        e.currentTarget.style.backgroundColor =
+                          "var(--primary, #ff4040)";
                     }}
                   >
                     {saving ? (
@@ -1655,7 +2084,21 @@ export default function DispatchEntries() {
                         Saving...
                       </>
                     ) : (
-                      "Save Dispatch Entry"
+                      <>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          style={{ height: "1rem", width: "1rem" }}
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        Save Dispatch Entry
+                      </>
                     )}
                   </button>
                 </div>
@@ -1665,7 +2108,7 @@ export default function DispatchEntries() {
               <div
                 style={{
                   width: "60%",
-                  padding: "1rem",
+                  padding: "1.5rem",
                   display: "flex",
                   flexDirection: "column",
                   overflow: "hidden",
@@ -1675,8 +2118,9 @@ export default function DispatchEntries() {
                   style={{
                     backgroundColor: "#f9fafb",
                     borderRadius: "0.5rem",
-                    padding: "0.5rem",
+                    padding: "0.75rem 1rem",
                     marginBottom: "1rem",
+                    border: "1px solid #e5e7eb",
                   }}
                 >
                   <h4
@@ -1684,7 +2128,7 @@ export default function DispatchEntries() {
                       fontSize: "0.875rem",
                       fontWeight: "600",
                       color: "#374151",
-                      marginBottom: "0.5rem",
+                      marginBottom: "0.375rem",
                       display: "flex",
                       alignItems: "center",
                       gap: "0.5rem",
@@ -1692,7 +2136,11 @@ export default function DispatchEntries() {
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      style={{ height: "1rem", width: "1rem" }}
+                      style={{
+                        height: "1rem",
+                        width: "1rem",
+                        color: "var(--primary, #ff4040)",
+                      }}
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -1721,6 +2169,7 @@ export default function DispatchEntries() {
                     backgroundColor: "#f3f4f6",
                     borderRadius: "0.5rem",
                     position: "relative",
+                    border: "1px solid #e5e7eb",
                   }}
                 >
                   {extractedData.invoiceImage ? (
@@ -1857,23 +2306,53 @@ export default function DispatchEntries() {
                   fontSize: "1.125rem",
                   fontWeight: "600",
                   color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
                 }}
               >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  style={{ height: "1.25rem", width: "1.25rem" }}
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z"
+                    clipRule="evenodd"
+                  />
+                </svg>
                 Confirm Duplicate Entry
               </h3>
               <button
                 onClick={() => cancelDuplicate()}
                 style={{
-                  backgroundColor: "transparent",
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
                   border: "none",
                   color: "white",
                   cursor: "pointer",
                   padding: "0.25rem",
+                  borderRadius: "9999px",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background-color 0.2s",
                 }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "rgba(255, 255, 255, 0.2)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor =
+                    "rgba(255, 255, 255, 0.1)")
+                }
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  style={{ height: "1.5rem", width: "1.5rem" }}
+                  style={{ height: "1.25rem", width: "1.25rem" }}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1892,7 +2371,7 @@ export default function DispatchEntries() {
               <div
                 style={{
                   marginBottom: "1.5rem",
-                  padding: "0.75rem",
+                  padding: "1rem",
                   backgroundColor: "#fff7ed",
                   border: "1px solid #ffedd5",
                   borderRadius: "0.5rem",
@@ -1904,7 +2383,7 @@ export default function DispatchEntries() {
                     fontSize: "0.875rem",
                     display: "flex",
                     alignItems: "flex-start",
-                    gap: "0.5rem",
+                    gap: "0.75rem",
                   }}
                 >
                   <svg
@@ -1925,13 +2404,47 @@ export default function DispatchEntries() {
                     />
                   </svg>
                   <span>
-                    This entry appears to be a duplicate. Make sure you want to
-                    save it anyway.
+                    <strong>Potential Duplicate:</strong> An entry with a
+                    similar invoice number already exists in the system. Please
+                    verify the information before saving.
                   </span>
                 </p>
               </div>
 
               <div style={{ display: "grid", gap: "1rem" }}>
+                {/* Date Field */}
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: "0.375rem",
+                    }}
+                  >
+                    Date
+                  </label>
+                  <input
+                    type="text"
+                    value={
+                      potentialDuplicate.date
+                        ? new Date(potentialDuplicate.date).toLocaleDateString()
+                        : ""
+                    }
+                    readOnly
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.75rem",
+                      borderRadius: "0.375rem",
+                      border: "1px solid #d1d5db",
+                      fontSize: "0.875rem",
+                      color: "#1f2937",
+                      backgroundColor: "#f9fafb",
+                    }}
+                  />
+                </div>
+
                 {/* Invoice Number Field */}
                 <div>
                   <label
@@ -1940,7 +2453,7 @@ export default function DispatchEntries() {
                       fontSize: "0.875rem",
                       fontWeight: "500",
                       color: "#374151",
-                      marginBottom: "0.25rem",
+                      marginBottom: "0.375rem",
                     }}
                   >
                     Invoice Number
@@ -1951,7 +2464,42 @@ export default function DispatchEntries() {
                     readOnly
                     style={{
                       width: "100%",
-                      padding: "0.5rem 0.75rem",
+                      padding: "0.625rem 0.75rem",
+                      borderRadius: "0.375rem",
+                      border: "1px solid #d1d5db",
+                      fontSize: "0.875rem",
+                      color: "#1f2937",
+                      backgroundColor: "#f9fafb",
+                    }}
+                  />
+                </div>
+
+                {/* Product Field */}
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: "0.375rem",
+                    }}
+                  >
+                    Product
+                  </label>
+                  <input
+                    type="text"
+                    value={
+                      potentialDuplicate.product
+                        ? `${potentialDuplicate.product.technicalName || ""} (${
+                            potentialDuplicate.product.commonName || ""
+                          })`
+                        : ""
+                    }
+                    readOnly
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.75rem",
                       borderRadius: "0.375rem",
                       border: "1px solid #d1d5db",
                       fontSize: "0.875rem",
@@ -1968,12 +2516,14 @@ export default function DispatchEntries() {
                   justifyContent: "flex-end",
                   gap: "0.75rem",
                   marginTop: "1.5rem",
+                  paddingTop: "1.5rem",
+                  borderTop: "1px solid #e5e7eb",
                 }}
               >
                 <button
                   onClick={() => cancelDuplicate()}
                   style={{
-                    padding: "0.5rem 1rem",
+                    padding: "0.625rem 1.25rem",
                     backgroundColor: "#f3f4f6",
                     color: "#374151",
                     border: "none",
@@ -1981,6 +2531,7 @@ export default function DispatchEntries() {
                     fontSize: "0.875rem",
                     fontWeight: "500",
                     cursor: "pointer",
+                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                   }}
                   onMouseOver={(e) =>
                     (e.currentTarget.style.backgroundColor = "#e5e7eb")
@@ -1994,7 +2545,7 @@ export default function DispatchEntries() {
                 <button
                   onClick={() => confirmDuplicate()}
                   style={{
-                    padding: "0.5rem 1rem",
+                    padding: "0.625rem 1.25rem",
                     backgroundColor: "#f97316",
                     color: "white",
                     border: "none",
@@ -2002,6 +2553,10 @@ export default function DispatchEntries() {
                     fontSize: "0.875rem",
                     fontWeight: "500",
                     cursor: "pointer",
+                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
                   }}
                   onMouseOver={(e) =>
                     (e.currentTarget.style.backgroundColor = "#ea580c")
@@ -2010,6 +2565,18 @@ export default function DispatchEntries() {
                     (e.currentTarget.style.backgroundColor = "#f97316")
                   }
                 >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    style={{ height: "1rem", width: "1rem" }}
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
                   Save Anyway
                 </button>
               </div>
@@ -2036,6 +2603,21 @@ export default function DispatchEntries() {
           to {
             transform: rotate(360deg);
           }
+        }
+
+        .tab-button {
+          position: relative;
+          border-bottom: none !important;
+        }
+
+        .tab-button.active-tab::after {
+          content: "";
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          width: 100%;
+          height: 2px;
+          background-color: var(--primary, #ff4040);
         }
       `}</style>
     </div>

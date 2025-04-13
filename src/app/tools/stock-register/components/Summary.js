@@ -13,6 +13,8 @@ import {
   Timestamp,
   startAt,
   endAt,
+  updateDoc,
+  setDoc,
 } from "firebase/firestore";
 import app from "@/firebase/config";
 import AppIcons from "@/components/AppIcons";
@@ -52,6 +54,12 @@ const Summary = () => {
     loading: true,
     error: null,
   });
+
+  // Add new state for editing quantity
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [newQuantity, setNewQuantity] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState({ type: "", text: "" });
 
   // Get month date range for the selected month (first day to last day)
   const getSelectedMonthRange = () => {
@@ -477,6 +485,139 @@ const Summary = () => {
     "December",
   ];
 
+  // Handle edit click for a product quantity
+  const handleEditClick = (product) => {
+    setEditingProduct(product);
+    setNewQuantity(product.stock.availableQuantity.toFixed(2));
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setEditingProduct(null);
+    setNewQuantity("");
+    setUpdateMessage({ type: "", text: "" });
+  };
+
+  // Handle quantity change
+  const handleQuantityChange = (e) => {
+    // Allow only numbers and decimal point
+    const value = e.target.value.replace(/[^0-9.]/g, "");
+    setNewQuantity(value);
+  };
+
+  // Handle save updated quantity
+  const handleSaveQuantity = async () => {
+    if (!editingProduct || !companyId) return;
+
+    setIsUpdating(true);
+    setUpdateMessage({ type: "", text: "" });
+
+    try {
+      const parsedQuantity = parseFloat(newQuantity);
+
+      if (isNaN(parsedQuantity)) {
+        throw new Error("Please enter a valid number");
+      }
+
+      const companyRef = doc(db, "companies", companyId);
+
+      // Find the stock document where productId equals the current product ID
+      const stockCollectionRef = collection(companyRef, "productStock");
+      const q = query(
+        stockCollectionRef,
+        where("productId", "==", editingProduct.id)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        // If no document exists yet, we need to create one
+        const newStockRef = doc(stockCollectionRef);
+        await setDoc(newStockRef, {
+          productId: editingProduct.id,
+          availableQuantity: parsedQuantity,
+          lastUpdated: new Date(),
+        });
+      } else {
+        // Update the existing document
+        const stockDoc = querySnapshot.docs[0];
+        await updateDoc(stockDoc.ref, {
+          availableQuantity: parsedQuantity,
+          lastUpdated: new Date(),
+        });
+      }
+
+      // Update local state
+      const updatedStockData = stockData.map((product) => {
+        if (product.id === editingProduct.id) {
+          return {
+            ...product,
+            stock: {
+              ...product.stock,
+              availableQuantity: parsedQuantity,
+              lastUpdated: new Date(),
+            },
+          };
+        }
+        return product;
+      });
+
+      setStockData(updatedStockData);
+
+      // If we're editing the selected product, update it too
+      if (selectedProduct && selectedProduct.id === editingProduct.id) {
+        setSelectedProduct({
+          ...selectedProduct,
+          stock: {
+            ...selectedProduct.stock,
+            availableQuantity: parsedQuantity,
+            lastUpdated: new Date(),
+          },
+        });
+      }
+
+      // Recalculate summary statistics
+      const summary = {
+        total: updatedStockData.length,
+        inStock: 0,
+        lowStock: 0,
+        outOfStock: 0,
+      };
+
+      updatedStockData.forEach((product) => {
+        const qty = product.stock.availableQuantity;
+        if (qty <= 0) {
+          summary.outOfStock++;
+        } else if (qty < 5) {
+          summary.lowStock++;
+        } else {
+          summary.inStock++;
+        }
+      });
+
+      setStockSummary(summary);
+
+      setUpdateMessage({
+        type: "success",
+        text: "Quantity updated successfully",
+      });
+
+      // Clear edit state after a short delay
+      setTimeout(() => {
+        setEditingProduct(null);
+        setNewQuantity("");
+        setUpdateMessage({ type: "", text: "" });
+      }, 2000);
+    } catch (err) {
+      console.error("Error updating quantity:", err);
+      setUpdateMessage({
+        type: "error",
+        text: err.message || "Failed to update quantity",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="dashboard-panel">
       <div className="dashboard-panel-header" style={{ display: "none" }}>
@@ -683,6 +824,11 @@ const Summary = () => {
             {/* Stock Table */}
             {(selectedProduct || showAllProducts) && (
               <div className="stock-table-container">
+                {updateMessage.text && (
+                  <div className={`update-message ${updateMessage.type}`}>
+                    {updateMessage.text}
+                  </div>
+                )}
                 <table className="stock-table">
                   <thead>
                     <tr>
@@ -699,7 +845,85 @@ const Summary = () => {
                         <td>{selectedProduct.technicalName || "—"}</td>
                         <td>{selectedProduct.commonName || "—"}</td>
                         <td className="quantity-cell">
-                          {selectedProduct.stock.availableQuantity.toFixed(2)}
+                          {editingProduct &&
+                          editingProduct.id === selectedProduct.id ? (
+                            <div className="quantity-edit">
+                              <input
+                                type="text"
+                                value={newQuantity}
+                                onChange={handleQuantityChange}
+                                className="quantity-input"
+                                autoFocus
+                              />
+                              <div className="edit-actions">
+                                <button
+                                  className="save-btn"
+                                  onClick={handleSaveQuantity}
+                                  disabled={isUpdating}
+                                >
+                                  {isUpdating ? (
+                                    <span className="spinner-sm"></span>
+                                  ) : (
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      viewBox="0 0 20 20"
+                                      fill="currentColor"
+                                      width="16"
+                                      height="16"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                  )}
+                                </button>
+                                <button
+                                  className="cancel-btn"
+                                  onClick={handleCancelEdit}
+                                  disabled={isUpdating}
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    width="16"
+                                    height="16"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="quantity-display">
+                              <span>
+                                {selectedProduct.stock.availableQuantity.toFixed(
+                                  2
+                                )}
+                              </span>
+                              <button
+                                className="edit-btn"
+                                onClick={() => handleEditClick(selectedProduct)}
+                                title="Edit quantity"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 20 20"
+                                  fill="currentColor"
+                                  width="16"
+                                  height="16"
+                                >
+                                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td>{formatDate(selectedProduct.stock.lastUpdated)}</td>
                         <td>
@@ -727,7 +951,83 @@ const Summary = () => {
                           <td>{product.technicalName || "—"}</td>
                           <td>{product.commonName || "—"}</td>
                           <td className="quantity-cell">
-                            {product.stock.availableQuantity.toFixed(2)}
+                            {editingProduct &&
+                            editingProduct.id === product.id ? (
+                              <div className="quantity-edit">
+                                <input
+                                  type="text"
+                                  value={newQuantity}
+                                  onChange={handleQuantityChange}
+                                  className="quantity-input"
+                                  autoFocus
+                                />
+                                <div className="edit-actions">
+                                  <button
+                                    className="save-btn"
+                                    onClick={handleSaveQuantity}
+                                    disabled={isUpdating}
+                                  >
+                                    {isUpdating ? (
+                                      <span className="spinner-sm"></span>
+                                    ) : (
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 20 20"
+                                        fill="currentColor"
+                                        width="16"
+                                        height="16"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <button
+                                    className="cancel-btn"
+                                    onClick={handleCancelEdit}
+                                    disabled={isUpdating}
+                                  >
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      viewBox="0 0 20 20"
+                                      fill="currentColor"
+                                      width="16"
+                                      height="16"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="quantity-display">
+                                <span>
+                                  {product.stock.availableQuantity.toFixed(2)}
+                                </span>
+                                <button
+                                  className="edit-btn"
+                                  onClick={() => handleEditClick(product)}
+                                  title="Edit quantity"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    width="16"
+                                    height="16"
+                                  >
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td>{formatDate(product.stock.lastUpdated)}</td>
                           <td>
@@ -1677,6 +1977,123 @@ const Summary = () => {
         /* Remove the current month display since we now have the picker */
         .current-month {
           display: none;
+        }
+
+        /* New styles for quantity editing */
+        .quantity-display {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .edit-btn {
+          background: none;
+          border: none;
+          color: #6b7280;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+          opacity: 0.5;
+        }
+
+        .quantity-display:hover .edit-btn {
+          opacity: 1;
+          color: #4f46e5;
+          background-color: #f3f4f6;
+        }
+
+        .quantity-edit {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .quantity-input {
+          width: 80px;
+          padding: 4px 8px;
+          border: 1px solid #d1d5db;
+          border-radius: 4px;
+          font-size: 0.875rem;
+        }
+
+        .quantity-input:focus {
+          outline: none;
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        }
+
+        .edit-actions {
+          display: flex;
+          gap: 4px;
+        }
+
+        .save-btn,
+        .cancel-btn {
+          background: none;
+          border: none;
+          padding: 4px;
+          border-radius: 4px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .save-btn {
+          color: #059669;
+          background-color: #d1fae5;
+        }
+
+        .save-btn:hover:not(:disabled) {
+          background-color: #a7f3d0;
+        }
+
+        .cancel-btn {
+          color: #dc2626;
+          background-color: #fee2e2;
+        }
+
+        .cancel-btn:hover:not(:disabled) {
+          background-color: #fecaca;
+        }
+
+        .save-btn:disabled,
+        .cancel-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .spinner-sm {
+          display: inline-block;
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-radius: 50%;
+          border-top-color: #059669;
+          animation: spin 1s ease-in-out infinite;
+        }
+
+        .update-message {
+          padding: 8px 16px;
+          margin-bottom: 8px;
+          border-radius: 4px;
+          font-size: 0.875rem;
+        }
+
+        .update-message.success {
+          background-color: #d1fae5;
+          color: #065f46;
+          border: 1px solid #a7f3d0;
+        }
+
+        .update-message.error {
+          background-color: #fee2e2;
+          color: #b91c1c;
+          border: 1px solid #fecaca;
         }
       `}</style>
     </div>
