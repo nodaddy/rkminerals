@@ -29,22 +29,34 @@ export const POST = async (req) => {
           content: [
             {
               type: "text",
-              text: `Please analyze this invoice and extract the following information:
+              text: `Please analyze this invoice and extract the following information for ALL dispatch entries in the invoice:
 - Date (look for "Invoice Date" or similar)
-- Product (look for "Material Description" or similar)
-- Quantity (look for "Qty" or similar)
+- Products (look for each "Material Description" or similar)
+- Quantities (look for each "Qty" or similar)
 - Truck Number (look for "Vehicle Number" or similar)
 - Invoice Number (look for "Invoice Number" or similar)
 
-Return ONLY a valid JSON object with these fields: 
+One invoice can contain multiple dispatch entries for different products.
+
+Return ONLY a valid JSON object with this structure: 
 {
-  "date": "(extracted date)",
-  "product": "(extracted product)",
-  "quantity": "(extracted quantity)",
-  "truckNumber": "(extracted truck number)",
-  "invoiceNumber": "(extracted invoice number)"
+  "date": "(extracted date, common for all entries)",
+  "truckNumber": "(extracted truck number, common for all entries)",
+  "invoiceNumber": "(extracted invoice number, common for all entries)",
+  "entries": [
+    {
+      "product": "(extracted product name)",
+      "quantity": "(extracted quantity)"
+    },
+    {
+      "product": "(extracted product name)",
+      "quantity": "(extracted quantity)"
+    },
+    ... additional entries as needed
+  ]
 }
 
+If you find only one product entry, still return it in the entries array format.
 If you cannot find a field, use an empty string for its value.
 Do not include any explanations or notes - only return the JSON object.`,
             },

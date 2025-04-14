@@ -44,6 +44,10 @@ export default function DispatchEntries() {
   const [lastInvoiceNumber, setLastInvoiceNumber] = useState("");
   const [loadingLastInvoice, setLoadingLastInvoice] = useState(false);
 
+  // New state for handling multiple entries
+  const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
+  const [entriesSaved, setEntriesSaved] = useState([]);
+
   // Dispatch form state
   const [date, setDate] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -218,188 +222,135 @@ export default function DispatchEntries() {
   // Check for duplicate entries
   const checkForDuplicates = (newEntry) => {
     // Check if there's an entry with the same date, product, and invoice number
-    return recentEntries.find(
-      (entry) =>
+    return recentEntries.find((entry) => {
+      return (
         parseInt(entry.invoiceNumber.split("/")[0]) >=
-        parseInt(newEntry.invoiceNumber.split("/")[0])
-    );
+          parseInt(newEntry.invoiceNumber.split("/")[0]) &&
+        entry.product.id === newEntry.product.id
+      );
+    });
   };
 
   // Handle saving to database
   const handleSaveToDatabase = async (data) => {
+    if (!date || !selectedProduct || !quantity || !invoiceNumber) {
+      showError("Please fill all required fields");
+      return;
+    }
+
     setSaving(true);
+
     try {
-      // Basic validation
-      if (!date) {
-        showError("Please select a date");
-        setSaving(false);
-        return;
-      }
-
-      if (!data.product) {
-        showError("Product information is missing");
-        setSaving(false);
-        return;
-      }
-
-      if (
-        !data.quantity ||
-        isNaN(parseFloat(data.quantity)) ||
-        parseFloat(data.quantity) <= 0
-      ) {
-        showError("Please enter a valid quantity");
-        setSaving(false);
-        return;
-      }
-
-      if (!data.truckNumber) {
-        showError("Truck number is missing");
-        setSaving(false);
-        return;
-      }
-
-      if (!data.invoiceNumber) {
-        showError("Invoice number is missing");
-        setSaving(false);
-        return;
-      }
-
-      // Find product detail
-      let productDetail = null;
-      if (typeof data.product === "string") {
-        // Find product by name
-        productDetail = products.find(
-          (p) =>
-            p.technicalName
-              ?.toLowerCase()
-              .includes(data.product.toLowerCase()) ||
-            p.commonName?.toLowerCase().includes(data.product.toLowerCase())
-        );
-      } else if (selectedProduct) {
-        productDetail = selectedProduct;
-      }
-
-      if (!productDetail) {
-        showError("Could not find matching product in the system");
-        setSaving(false);
-        return;
-      }
-
-      // Use selected bag type or default to the first one
-      const bagTypeDetail = { id: "unknown", name: "Unknown" };
-
-      // Prepare the entry data
-      const entryData = {
+      // Format the data
+      const formattedData = {
         date: Timestamp.fromDate(new Date(date)),
         product: {
-          id: productDetail.id,
-          technicalName: productDetail.technicalName,
-          commonName: productDetail.commonName,
+          id: selectedProduct.id,
+          technicalName: selectedProduct.technicalName,
+          commonName: selectedProduct.commonName || "",
         },
-        quantity: parseFloat(data.quantity),
-        truckNumber: data.truckNumber,
-        invoiceNumber: data.invoiceNumber,
+        quantity: parseFloat(quantity),
+        truckNumber: truckNumber || "",
+        invoiceNumber: invoiceNumber,
         createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        companyId: companyId,
       };
 
-      // Check for duplicates if not already confirmed
-      const duplicateEntry = checkForDuplicates(entryData);
-      if (duplicateEntry && !potentialDuplicate) {
-        setPotentialDuplicate(entryData);
+      // Check for duplicate entries with the same invoice number
+      const potentialDuplicate = checkForDuplicates(formattedData);
+      if (potentialDuplicate && !showDuplicateWarning) {
+        // Show duplicate warning
+        setPotentialDuplicate(formattedData);
         setShowDuplicateWarning(true);
         setSaving(false);
         return;
       }
 
-      // If this is a confirmed duplicate, add the flag
-      if (potentialDuplicate) {
-        entryData.potentialDuplicate = true;
-        // Reset the potential duplicate state
-        setPotentialDuplicate(null);
-      }
-
-      // Get a reference to the Firestore database
-      const companyRef = doc(db, "companies", companyId);
-
       // 1. Save the dispatch entry
-      const entriesCollectionRef = collection(companyRef, "dispatchEntries");
-      await addDoc(entriesCollectionRef, entryData);
+      const dispatchRef = collection(
+        doc(db, "companies", companyId),
+        "dispatchEntries"
+      );
+      const docRef = await addDoc(dispatchRef, formattedData);
+      console.log("Document saved with ID: ", docRef.id);
 
-      // 2. Update product stock (DECREASE stock unlike incoming/production)
-      const productStockCollectionRef = collection(companyRef, "productStock");
+      // 2. Update product stock (DECREASE stock for dispatch)   // 2. Update product stock
+      const productStockCollectionRef = collection(
+        doc(db, "companies", companyId),
+        "productStock"
+      );
 
       // Check if stock record already exists for this product
       const productStockQuery = query(
         productStockCollectionRef,
-        where("productId", "==", productDetail.id)
+        where("productId", "==", selectedProduct.id)
       );
 
       const querySnapshot = await getDocs(productStockQuery);
 
       // Transaction to ensure consistent stock updates
       if (querySnapshot.empty) {
-        // Product stock doesn't exist yet - create new document with negative quantity
-        // This is unusual for a dispatch, but could happen if data is out of sync
+        // Product stock doesn't exist yet - create new document
         await addDoc(productStockCollectionRef, {
-          productId: productDetail.id,
-          productName: productDetail.technicalName,
-          productCommonName: productDetail.commonName,
-          availableQuantity: -parseFloat(data.quantity), // Negative value for dispatch
+          productId: selectedProduct.id,
+          productName: selectedProduct.technicalName,
+          productCommonName: selectedProduct.commonName,
+          availableQuantity: 0 - parseFloat(quantity),
           lastUpdated: Timestamp.now(),
         });
         console.log(
-          `Created new stock record for ${productDetail.technicalName} with -${data.quantity} units`
+          `Created new stock record for ${selectedProduct.technicalName} with ${quantity} units`
         );
       } else {
         // Product stock exists - update the existing document
         const stockDoc = querySnapshot.docs[0];
         const stockData = stockDoc.data();
 
-        // Update available quantity (DECREASE for dispatch)
-        const updatedQuantity =
-          (stockData.availableQuantity || 0) - parseFloat(data.quantity);
-
+        // Update available quantity
         await updateDoc(doc(productStockCollectionRef, stockDoc.id), {
-          availableQuantity: updatedQuantity,
+          availableQuantity:
+            (stockData.availableQuantity || 0) - parseFloat(quantity),
           lastUpdated: Timestamp.now(),
         });
         console.log(
-          `Updated stock for ${productDetail.technicalName} to ${updatedQuantity} units`
+          `Updated stock for ${selectedProduct.technicalName} to ${
+            (stockData.availableQuantity || 0) - parseFloat(quantity)
+          } units`
         );
       }
 
       // 3. Try to update company's lastInvoiceNumber
       try {
         // First, check if company document exists
+        const companyRef = doc(db, "companies", companyId);
         const companyDoc = await getDoc(companyRef);
 
         if (companyDoc.exists()) {
           // Document exists, update it
           await updateDoc(companyRef, {
-            lastInvoiceNumber: data.invoiceNumber,
+            lastInvoiceNumber: formattedData.invoiceNumber,
             lastUpdated: Timestamp.now(),
           });
           console.log(
-            `Updated company's lastInvoiceNumber to ${data.invoiceNumber}`
+            `Updated company's lastInvoiceNumber to ${formattedData.invoiceNumber}`
           );
 
           // Update the lastInvoiceNumber in the UI
-          setLastInvoiceNumber(data.invoiceNumber);
+          setLastInvoiceNumber(formattedData.invoiceNumber);
         } else {
           // Document doesn't exist, create it
           await setDoc(companyRef, {
-            lastInvoiceNumber: data.invoiceNumber,
+            lastInvoiceNumber: formattedData.invoiceNumber,
             lastUpdated: Timestamp.now(),
             name: "Company", // Default name in case it's a new company
             createdAt: Timestamp.now(),
           });
           console.log(
-            `Created company document with lastInvoiceNumber: ${data.invoiceNumber}`
+            `Created company document with lastInvoiceNumber: ${formattedData.invoiceNumber}`
           );
 
           // Update the lastInvoiceNumber in the UI
-          setLastInvoiceNumber(data.invoiceNumber);
+          setLastInvoiceNumber(formattedData.invoiceNumber);
         }
       } catch (error) {
         console.error("Error updating company document:", error);
@@ -407,14 +358,28 @@ export default function DispatchEntries() {
         // Just log it for troubleshooting
       }
 
-      // Reset states after saving
-      setExtractedData(null);
-      setShowConfirmation(false);
-      setPdfFile(null);
-      resetFormFields();
+      // Mark the current entry as saved
+      markEntrySaved(currentEntryIndex);
 
       // Show success indicator
       showSuccess("Dispatch entry saved successfully!");
+
+      // Check if there are more entries to save
+      if (
+        extractedData &&
+        extractedData.entries &&
+        currentEntryIndex < extractedData.entries.length - 1
+      ) {
+        // Go to the next entry
+        goToNextEntry();
+      } else {
+        // All entries for this invoice have been processed
+        // Reset the form and close the dialog
+        setExtractedData(null);
+        setShowConfirmation(false);
+        setPdfFile(null);
+        resetFormFields();
+      }
 
       // Refresh entries list for the current date
       fetchEntriesByDate(date);
@@ -432,7 +397,6 @@ export default function DispatchEntries() {
     setQuantity("");
     setTruckNumber("");
     setInvoiceNumber("");
-    setSelectedBagType(null);
     setShowDuplicateWarning(false);
   };
 
@@ -544,6 +508,8 @@ export default function DispatchEntries() {
     setProcessing(true);
     setProgress(0);
     setError("");
+    setCurrentEntryIndex(0);
+    setEntriesSaved([]);
 
     try {
       const reader = new FileReader();
@@ -598,44 +564,33 @@ export default function DispatchEntries() {
             try {
               const extractedData = await processImageWithOpenAI(currentImage);
 
-              // Populate form fields if data is found
-              if (extractedData) {
-                if (extractedData.date) {
-                  const dateObj = new Date(extractedData.date);
-                  if (!isNaN(dateObj.getTime())) {
-                    setDate(dateObj.toISOString().split("T")[0]);
-                  }
-                }
+              // Initialize arrays for tracking saved entries
+              if (extractedData.entries && extractedData.entries.length > 0) {
+                setEntriesSaved(
+                  new Array(extractedData.entries.length).fill(false)
+                );
+              }
 
-                // Find product from the extracted product name if available
-                if (extractedData.product) {
-                  const matchedProduct = products.find(
-                    (p) =>
-                      p.technicalName
-                        ?.toLowerCase()
-                        .includes(extractedData.product.toLowerCase()) ||
-                      p.commonName
-                        ?.toLowerCase()
-                        .includes(extractedData.product.toLowerCase())
-                  );
-
-                  if (matchedProduct) {
-                    setSelectedProduct(matchedProduct);
-                  }
-                }
-
-                if (extractedData.quantity) {
-                  setQuantity(extractedData.quantity);
-                }
-
-                if (extractedData.truckNumber) {
-                  setTruckNumber(extractedData.truckNumber);
-                }
-
-                if (extractedData.invoiceNumber) {
-                  setInvoiceNumber(extractedData.invoiceNumber);
+              // Set common fields
+              if (extractedData.date) {
+                const dateObj = new Date(extractedData.date);
+                if (!isNaN(dateObj.getTime())) {
+                  // Fix the date offset issue by adding a day
+                  dateObj.setDate(dateObj.getDate() + 1);
+                  setDate(dateObj.toISOString().split("T")[0]);
                 }
               }
+
+              if (extractedData.truckNumber) {
+                setTruckNumber(extractedData.truckNumber);
+              }
+
+              if (extractedData.invoiceNumber) {
+                setInvoiceNumber(extractedData.invoiceNumber);
+              }
+
+              // Set the first entry's data (if available)
+              setEntryData(extractedData, 0);
 
               // Store the extracted data and invoice image for preview
               setExtractedData({
@@ -664,6 +619,65 @@ export default function DispatchEntries() {
       setError("Error during conversion. Please try again with another file.");
       setProcessing(false);
     }
+  };
+
+  // Helper function to set the current entry data
+  const setEntryData = (data, index) => {
+    if (!data || !data.entries || !data.entries[index]) return;
+
+    const entry = data.entries[index];
+
+    // Find product from the extracted product name if available
+    if (entry.product) {
+      const matchedProduct = products.find(
+        (p) =>
+          p.technicalName
+            ?.toLowerCase()
+            .includes(entry.product.toLowerCase()) ||
+          p.commonName?.toLowerCase().includes(entry.product.toLowerCase())
+      );
+
+      if (matchedProduct) {
+        setSelectedProduct(matchedProduct);
+      } else {
+        setSelectedProduct(null);
+      }
+    } else {
+      setSelectedProduct(null);
+    }
+
+    if (entry.quantity) {
+      setQuantity(entry.quantity);
+    } else {
+      setQuantity("");
+    }
+  };
+
+  // Function to navigate to the previous entry
+  const goToPreviousEntry = () => {
+    if (extractedData && extractedData.entries && currentEntryIndex > 0) {
+      setCurrentEntryIndex(currentEntryIndex - 1);
+      setEntryData(extractedData, currentEntryIndex - 1);
+    }
+  };
+
+  // Function to navigate to the next entry
+  const goToNextEntry = () => {
+    if (
+      extractedData &&
+      extractedData.entries &&
+      currentEntryIndex < extractedData.entries.length - 1
+    ) {
+      setCurrentEntryIndex(currentEntryIndex + 1);
+      setEntryData(extractedData, currentEntryIndex + 1);
+    }
+  };
+
+  // Function to mark current entry as saved
+  const markEntrySaved = (index) => {
+    const updatedEntriesSaved = [...entriesSaved];
+    updatedEntriesSaved[index] = true;
+    setEntriesSaved(updatedEntriesSaved);
   };
 
   // State for magnifier
@@ -1998,7 +2012,12 @@ export default function DispatchEntries() {
                   }}
                 >
                   <button
-                    onClick={() => setShowConfirmation(false)}
+                    onClick={() => {
+                      setShowConfirmation(false);
+                      setExtractedData(null);
+                      setPdfFile(null);
+                      resetFormFields();
+                    }}
                     style={{
                       padding: "0.625rem 1.25rem",
                       backgroundColor: "#f3f4f6",
@@ -2158,6 +2177,145 @@ export default function DispatchEntries() {
                     Hover over the invoice to magnify details
                   </p>
                 </div>
+
+                {/* Add Entry Navigation if multiple entries exist */}
+                {extractedData &&
+                  extractedData.entries &&
+                  extractedData.entries.length > 1 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginBottom: "1rem",
+                        padding: "0.5rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <button
+                        onClick={goToPreviousEntry}
+                        disabled={currentEntryIndex === 0}
+                        style={{
+                          padding: "0.5rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "none",
+                          backgroundColor:
+                            currentEntryIndex === 0 ? "#e5e7eb" : "#f3f4f6",
+                          borderRadius: "0.375rem",
+                          cursor:
+                            currentEntryIndex === 0 ? "not-allowed" : "pointer",
+                          color:
+                            currentEntryIndex === 0 ? "#9ca3af" : "#374151",
+                        }}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          style={{ height: "1.25rem", width: "1.25rem" }}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M15.75 19.5L8.25 12l7.5-7.5"
+                          />
+                        </svg>
+                      </button>
+
+                      <div
+                        style={{
+                          margin: "0 1rem",
+                          display: "flex",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        {extractedData.entries.map((entry, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setCurrentEntryIndex(index);
+                              setEntryData(extractedData, index);
+                            }}
+                            style={{
+                              width: "2rem",
+                              height: "2rem",
+                              borderRadius: "50%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              border: "none",
+                              backgroundColor:
+                                currentEntryIndex === index
+                                  ? "var(--primary, #ff4040)"
+                                  : entriesSaved[index]
+                                  ? "#10b981"
+                                  : "#e5e7eb",
+                              color:
+                                currentEntryIndex === index ||
+                                entriesSaved[index]
+                                  ? "white"
+                                  : "#6b7280",
+                              cursor: "pointer",
+                              position: "relative",
+                            }}
+                          >
+                            {index + 1}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={goToNextEntry}
+                        disabled={
+                          currentEntryIndex === extractedData.entries.length - 1
+                        }
+                        style={{
+                          padding: "0.5rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "none",
+                          backgroundColor:
+                            currentEntryIndex ===
+                            extractedData.entries.length - 1
+                              ? "#e5e7eb"
+                              : "#f3f4f6",
+                          borderRadius: "0.375rem",
+                          cursor:
+                            currentEntryIndex ===
+                            extractedData.entries.length - 1
+                              ? "not-allowed"
+                              : "pointer",
+                          color:
+                            currentEntryIndex ===
+                            extractedData.entries.length - 1
+                              ? "#9ca3af"
+                              : "#374151",
+                        }}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          style={{ height: "1.25rem", width: "1.25rem" }}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M8.25 4.5l7.5 7.5-7.5 7.5"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
 
                 <div
                   style={{

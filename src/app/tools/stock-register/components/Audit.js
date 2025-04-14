@@ -209,6 +209,7 @@ const Audit = ({ userRole }) => {
 
   // Render entry details based on entry type
   const renderEntryDetails = (entry) => {
+    console.log(entry);
     switch (activeTab) {
       case "incoming":
         return (
