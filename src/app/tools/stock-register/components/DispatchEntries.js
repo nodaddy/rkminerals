@@ -361,25 +361,8 @@ export default function DispatchEntries() {
       // Mark the current entry as saved
       markEntrySaved(currentEntryIndex);
 
-      // Show success indicator
+      // Show success indicator for this entry
       showSuccess("Dispatch entry saved successfully!");
-
-      // Check if there are more entries to save
-      if (
-        extractedData &&
-        extractedData.entries &&
-        currentEntryIndex < extractedData.entries.length - 1
-      ) {
-        // Go to the next entry
-        goToNextEntry();
-      } else {
-        // All entries for this invoice have been processed
-        // Reset the form and close the dialog
-        setExtractedData(null);
-        setShowConfirmation(false);
-        setPdfFile(null);
-        resetFormFields();
-      }
 
       // Refresh entries list for the current date
       fetchEntriesByDate(date);
@@ -656,8 +639,15 @@ export default function DispatchEntries() {
   // Function to navigate to the previous entry
   const goToPreviousEntry = () => {
     if (extractedData && extractedData.entries && currentEntryIndex > 0) {
-      setCurrentEntryIndex(currentEntryIndex - 1);
-      setEntryData(extractedData, currentEntryIndex - 1);
+      // Find the previous unsaved entry
+      for (let i = currentEntryIndex - 1; i >= 0; i--) {
+        if (!entriesSaved[i]) {
+          setCurrentEntryIndex(i);
+          setEntryData(extractedData, i);
+          return;
+        }
+      }
+      // If we get here, no unsaved entries were found before the current one
     }
   };
 
@@ -668,9 +658,27 @@ export default function DispatchEntries() {
       extractedData.entries &&
       currentEntryIndex < extractedData.entries.length - 1
     ) {
-      setCurrentEntryIndex(currentEntryIndex + 1);
-      setEntryData(extractedData, currentEntryIndex + 1);
+      // Find the next unsaved entry
+      for (
+        let i = currentEntryIndex + 1;
+        i < extractedData.entries.length;
+        i++
+      ) {
+        if (!entriesSaved[i]) {
+          setCurrentEntryIndex(i);
+          setEntryData(extractedData, i);
+          return;
+        }
+      }
+      // If we get here, no unsaved entries were found after the current one
     }
+  };
+
+  // Get unsaved entries
+  const getUnsavedEntries = () => {
+    if (!extractedData || !extractedData.entries) return [];
+
+    return extractedData.entries.filter((_, index) => !entriesSaved[index]);
   };
 
   // Function to mark current entry as saved
@@ -678,6 +686,34 @@ export default function DispatchEntries() {
     const updatedEntriesSaved = [...entriesSaved];
     updatedEntriesSaved[index] = true;
     setEntriesSaved(updatedEntriesSaved);
+
+    // Check if all entries are now saved
+    const allSaved = updatedEntriesSaved.every((entry) => entry === true);
+
+    if (allSaved) {
+      // All entries have been saved, close the modal
+      setExtractedData(null);
+      setShowConfirmation(false);
+      setPdfFile(null);
+      resetFormFields();
+      showSuccess("All dispatch entries saved successfully!");
+      return;
+    }
+
+    // Find the next entry in sequence (not saved)
+    let nextEntryIndex = -1;
+    for (let i = 0; i < updatedEntriesSaved.length; i++) {
+      if (!updatedEntriesSaved[i]) {
+        nextEntryIndex = i;
+        break;
+      }
+    }
+
+    // If found, move to that entry
+    if (nextEntryIndex !== -1) {
+      setCurrentEntryIndex(nextEntryIndex);
+      setEntryData(extractedData, nextEntryIndex);
+    }
   };
 
   // State for magnifier
@@ -1830,8 +1866,15 @@ export default function DispatchEntries() {
                         clipRule="evenodd"
                       />
                     </svg>
-                    Please review the extracted information and make any
-                    necessary corrections before saving.
+                    {extractedData?.entries &&
+                    extractedData.entries.length > 1 ? (
+                      <strong>
+                        Entry {currentEntryIndex + 1} of{" "}
+                        {extractedData.entries.length}
+                      </strong>
+                    ) : (
+                      <strong>Dispatch Entry</strong>
+                    )}
                   </p>
                 </div>
 
@@ -2013,6 +2056,7 @@ export default function DispatchEntries() {
                 >
                   <button
                     onClick={() => {
+                      // Simply close the form without checking for unsaved entries
                       setShowConfirmation(false);
                       setExtractedData(null);
                       setPdfFile(null);
@@ -2177,145 +2221,6 @@ export default function DispatchEntries() {
                     Hover over the invoice to magnify details
                   </p>
                 </div>
-
-                {/* Add Entry Navigation if multiple entries exist */}
-                {extractedData &&
-                  extractedData.entries &&
-                  extractedData.entries.length > 1 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginBottom: "1rem",
-                        padding: "0.5rem",
-                        backgroundColor: "#f9fafb",
-                        borderRadius: "0.5rem",
-                        border: "1px solid #e5e7eb",
-                      }}
-                    >
-                      <button
-                        onClick={goToPreviousEntry}
-                        disabled={currentEntryIndex === 0}
-                        style={{
-                          padding: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: "none",
-                          backgroundColor:
-                            currentEntryIndex === 0 ? "#e5e7eb" : "#f3f4f6",
-                          borderRadius: "0.375rem",
-                          cursor:
-                            currentEntryIndex === 0 ? "not-allowed" : "pointer",
-                          color:
-                            currentEntryIndex === 0 ? "#9ca3af" : "#374151",
-                        }}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          style={{ height: "1.25rem", width: "1.25rem" }}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M15.75 19.5L8.25 12l7.5-7.5"
-                          />
-                        </svg>
-                      </button>
-
-                      <div
-                        style={{
-                          margin: "0 1rem",
-                          display: "flex",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        {extractedData.entries.map((entry, index) => (
-                          <button
-                            key={index}
-                            onClick={() => {
-                              setCurrentEntryIndex(index);
-                              setEntryData(extractedData, index);
-                            }}
-                            style={{
-                              width: "2rem",
-                              height: "2rem",
-                              borderRadius: "50%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              border: "none",
-                              backgroundColor:
-                                currentEntryIndex === index
-                                  ? "var(--primary, #ff4040)"
-                                  : entriesSaved[index]
-                                  ? "#10b981"
-                                  : "#e5e7eb",
-                              color:
-                                currentEntryIndex === index ||
-                                entriesSaved[index]
-                                  ? "white"
-                                  : "#6b7280",
-                              cursor: "pointer",
-                              position: "relative",
-                            }}
-                          >
-                            {index + 1}
-                          </button>
-                        ))}
-                      </div>
-
-                      <button
-                        onClick={goToNextEntry}
-                        disabled={
-                          currentEntryIndex === extractedData.entries.length - 1
-                        }
-                        style={{
-                          padding: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: "none",
-                          backgroundColor:
-                            currentEntryIndex ===
-                            extractedData.entries.length - 1
-                              ? "#e5e7eb"
-                              : "#f3f4f6",
-                          borderRadius: "0.375rem",
-                          cursor:
-                            currentEntryIndex ===
-                            extractedData.entries.length - 1
-                              ? "not-allowed"
-                              : "pointer",
-                          color:
-                            currentEntryIndex ===
-                            extractedData.entries.length - 1
-                              ? "#9ca3af"
-                              : "#374151",
-                        }}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          style={{ height: "1.25rem", width: "1.25rem" }}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M8.25 4.5l7.5 7.5-7.5 7.5"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
 
                 <div
                   style={{

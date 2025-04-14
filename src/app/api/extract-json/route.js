@@ -42,7 +42,7 @@ Return ONLY a valid JSON object with this structure:
 {
   "date": "(extracted date, common for all entries)",
   "truckNumber": "(extracted truck number, common for all entries)",
-  "invoiceNumber": "(extracted invoice number, common for all entries)",
+  "invoiceNumber": "(extracted invoice number, common for all entries, it is of the format xx/xxxx-xx)",
   "entries": [
     {
       "product": "(extracted product name)",
