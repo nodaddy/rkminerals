@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   getFirestore,
   collection,
@@ -12,6 +12,7 @@ import {
   getDocs,
   doc,
   Timestamp,
+  updateDoc,
 } from "firebase/firestore";
 import app from "../../../../firebase/config";
 import { useAppContext } from "../../../../context/AppContext";
@@ -20,8 +21,9 @@ import { useNotification } from "../../../../context/NotificationContext";
 const db = getFirestore(app);
 
 const Audit = ({ userRole }) => {
-  const { companyId } = useAppContext();
-  const { showError } = useNotification();
+  const { companyId, products, suppliers, buyers, bagTypes, machines } =
+    useAppContext();
+  const { showSuccess, showError } = useNotification();
 
   // Entry type state
   const [activeTab, setActiveTab] = useState("incoming");
@@ -36,6 +38,53 @@ const Audit = ({ userRole }) => {
   const [lastVisible, setLastVisible] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 10;
+
+  // Edit entry state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Dropdown refs and state
+  const productDropdownRef = useRef(null);
+  const supplierDropdownRef = useRef(null);
+  const buyerDropdownRef = useRef(null);
+
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState("");
+  const [buyerSearchTerm, setBuyerSearchTerm] = useState("");
+
+  const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+  const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  const [buyerDropdownOpen, setBuyerDropdownOpen] = useState(false);
+
+  // Edit form fields
+  const [editDate, setEditDate] = useState("");
+  const [editProduct, setEditProduct] = useState(null);
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editSupplier, setEditSupplier] = useState(null);
+  const [editBuyer, setEditBuyer] = useState(null);
+  const [editTruckNumber, setEditTruckNumber] = useState("");
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState("");
+  const [editMachine, setEditMachine] = useState(null);
+
+  // Filter dropdown options
+  const filteredProducts = products.filter(
+    (product) =>
+      product.technicalName
+        ?.toLowerCase()
+        .includes(productSearchTerm.toLowerCase()) ||
+      product.commonName
+        ?.toLowerCase()
+        .includes(productSearchTerm.toLowerCase())
+  );
+
+  const filteredSuppliers = suppliers.filter((supplier) =>
+    supplier.name?.toLowerCase().includes(supplierSearchTerm.toLowerCase())
+  );
+
+  const filteredBuyers = buyers.filter((buyer) =>
+    buyer.name?.toLowerCase().includes(buyerSearchTerm.toLowerCase())
+  );
 
   // Format date for display
   const formatDate = (date) => {
@@ -207,9 +256,148 @@ const Audit = ({ userRole }) => {
     setEndDate(today.toISOString().split("T")[0]);
   }, []);
 
+  // Handle clicking outside dropdowns
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        productDropdownRef.current &&
+        !productDropdownRef.current.contains(e.target)
+      ) {
+        setProductDropdownOpen(false);
+      }
+      if (
+        supplierDropdownRef.current &&
+        !supplierDropdownRef.current.contains(e.target)
+      ) {
+        setSupplierDropdownOpen(false);
+      }
+      if (
+        buyerDropdownRef.current &&
+        !buyerDropdownRef.current.contains(e.target)
+      ) {
+        setBuyerDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Open edit modal with entry data
+  const handleEditClick = (entry) => {
+    setEditEntry(entry);
+
+    // Set form values based on entry type and data
+    setEditDate(entry.date.toISOString().split("T")[0]);
+    setEditProduct(entry.product || null);
+    setEditQuantity(entry.quantity || "");
+    setEditSupplier(entry.supplier || null);
+    setEditBuyer(entry.buyer || null);
+    setEditTruckNumber(entry.truckNumber || "");
+    setEditInvoiceNumber(entry.invoiceNumber || "");
+    setEditMachine(entry.machine || null);
+
+    setEditModalOpen(true);
+  };
+
+  // Close edit modal
+  const handleCloseEditModal = () => {
+    setEditModalOpen(false);
+    setEditEntry(null);
+    resetEditForm();
+  };
+
+  // Reset edit form fields
+  const resetEditForm = () => {
+    setEditDate("");
+    setEditProduct(null);
+    setEditQuantity("");
+    setEditSupplier(null);
+    setEditBuyer(null);
+    setEditTruckNumber("");
+    setEditInvoiceNumber("");
+    setEditMachine(null);
+    setProductSearchTerm("");
+    setSupplierSearchTerm("");
+    setBuyerSearchTerm("");
+  };
+
+  // Save edited entry
+  const handleSaveEdit = async () => {
+    if (!editEntry || !editDate || !editProduct || !editQuantity) {
+      showError("Please fill in all required fields");
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      const entryData = {
+        date: Timestamp.fromDate(new Date(editDate)),
+        product: editProduct,
+        quantity: parseFloat(editQuantity),
+        updatedAt: Timestamp.fromDate(new Date()),
+      };
+
+      // Add type-specific fields
+      if (activeTab === "incoming") {
+        if (!editSupplier || !editTruckNumber) {
+          showError("Please fill in all required fields");
+          setIsUpdating(false);
+          return;
+        }
+        entryData.supplier = editSupplier;
+        entryData.truckNumber = editTruckNumber;
+      } else if (activeTab === "production") {
+        if (!editMachine) {
+          showError("Please select a machine");
+          setIsUpdating(false);
+          return;
+        }
+        entryData.machine = editMachine;
+      } else if (activeTab === "dispatch") {
+        if (!editTruckNumber || !editInvoiceNumber) {
+          showError("Please fill in all required fields");
+          setIsUpdating(false);
+          return;
+        }
+        // Preserve the existing buyer if it exists in the entry
+        if (editEntry.buyer) {
+          entryData.buyer = editEntry.buyer;
+        }
+        entryData.truckNumber = editTruckNumber;
+        entryData.invoiceNumber = editInvoiceNumber;
+      }
+
+      // Update document in Firestore
+      const companyRef = doc(db, "companies", companyId);
+      const entryDocRef = doc(companyRef, getCollectionName(), editEntry.id);
+      await updateDoc(entryDocRef, entryData);
+
+      // Update local entries
+      const updatedEntries = entries.map((entry) =>
+        entry.id === editEntry.id
+          ? {
+              ...entry,
+              ...entryData,
+              date: new Date(editDate),
+            }
+          : entry
+      );
+      setEntries(updatedEntries);
+
+      showSuccess("Entry updated successfully");
+      handleCloseEditModal();
+    } catch (error) {
+      console.error("Error updating entry:", error);
+      showError("Failed to update entry");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Render entry details based on entry type
   const renderEntryDetails = (entry) => {
-    console.log(entry);
     switch (activeTab) {
       case "incoming":
         return (
@@ -224,10 +412,7 @@ const Audit = ({ userRole }) => {
             </div>
             <div className="entry-field">
               <span className="field-label">Quantity:</span>
-              <span className="field-value">
-                {entry.quantity}{" "}
-                {entry.bagType?.name ? `(${entry.bagType.name})` : ""}
-              </span>
+              <span className="field-value">{entry.quantity}</span>
             </div>
             <div className="entry-field">
               <span className="field-label">Supplier:</span>
@@ -254,10 +439,7 @@ const Audit = ({ userRole }) => {
             </div>
             <div className="entry-field">
               <span className="field-label">Quantity:</span>
-              <span className="field-value">
-                {entry.quantity}{" "}
-                {entry.bagType?.name ? `(${entry.bagType.name})` : ""}
-              </span>
+              <span className="field-value">{entry.quantity}</span>
             </div>
             <div className="entry-field">
               <span className="field-label">Machine:</span>
@@ -280,10 +462,11 @@ const Audit = ({ userRole }) => {
             </div>
             <div className="entry-field">
               <span className="field-label">Quantity:</span>
-              <span className="field-value">
-                {entry.quantity}{" "}
-                {entry.bagType?.name ? `(${entry.bagType.name})` : ""}
-              </span>
+              <span className="field-value">{entry.quantity}</span>
+            </div>
+            <div className="entry-field">
+              <span className="field-label">Buyer:</span>
+              <span className="field-value">{entry.buyer?.name || "N/A"}</span>
             </div>
             <div className="entry-field">
               <span className="field-label">Truck No:</span>
@@ -366,11 +549,19 @@ const Audit = ({ userRole }) => {
                 <div key={entry.id} className="entry-card">
                   <div className="entry-header">
                     <div className="entry-date">{formatDate(entry.date)}</div>
-                    {entry.potentialDuplicate && (
-                      <div className="entry-duplicate-tag">
-                        Potential Duplicate
-                      </div>
-                    )}
+                    <div className="entry-actions">
+                      {entry.potentialDuplicate && (
+                        <div className="entry-duplicate-tag">
+                          Potential Duplicate
+                        </div>
+                      )}
+                      <button
+                        className="edit-button"
+                        onClick={() => handleEditClick(entry)}
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
                   <div className="entry-body">{renderEntryDetails(entry)}</div>
                   <div className="entry-footer">
@@ -402,6 +593,247 @@ const Audit = ({ userRole }) => {
               </div>
             )}
           </div>
+
+          {/* Edit Modal */}
+          {editModalOpen && (
+            <div className="modal-overlay">
+              <div className="edit-modal">
+                <div className="modal-header">
+                  <h3>
+                    Edit{" "}
+                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}{" "}
+                    Entry
+                  </h3>
+                  <button
+                    className="close-button"
+                    onClick={handleCloseEditModal}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <div className="form-group">
+                    <label htmlFor="edit-date">Date</label>
+                    <input
+                      type="date"
+                      id="edit-date"
+                      className="premium-input"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Product</label>
+                    <div
+                      className="dropdown-container"
+                      ref={productDropdownRef}
+                    >
+                      <input
+                        type="text"
+                        className="premium-input"
+                        placeholder="Select product..."
+                        value={
+                          editProduct
+                            ? `${editProduct.technicalName} (${editProduct.commonName})`
+                            : productSearchTerm
+                        }
+                        onChange={(e) => {
+                          if (editProduct) setEditProduct(null);
+                          setProductSearchTerm(e.target.value);
+                          setProductDropdownOpen(true);
+                        }}
+                        onClick={() => setProductDropdownOpen(true)}
+                        required
+                      />
+                      {productDropdownOpen && (
+                        <div className="dropdown-menu">
+                          {filteredProducts.length > 0 ? (
+                            filteredProducts.map((product) => (
+                              <div
+                                key={product.id}
+                                className="dropdown-item"
+                                onClick={() => {
+                                  setEditProduct(product);
+                                  setProductSearchTerm("");
+                                  setProductDropdownOpen(false);
+                                }}
+                              >
+                                <div className="item-name">
+                                  {product.technicalName}
+                                </div>
+                                <div className="item-details">
+                                  {product.commonName}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="no-results">No products found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="edit-quantity">Quantity</label>
+                    <input
+                      type="number"
+                      id="edit-quantity"
+                      className="premium-input"
+                      placeholder="Enter quantity"
+                      value={editQuantity}
+                      onChange={(e) => setEditQuantity(e.target.value)}
+                      min="0.01"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+
+                  {activeTab === "incoming" && (
+                    <>
+                      <div className="form-group">
+                        <label>Supplier</label>
+                        <div
+                          className="dropdown-container"
+                          ref={supplierDropdownRef}
+                        >
+                          <input
+                            type="text"
+                            className="premium-input"
+                            placeholder="Select supplier..."
+                            value={
+                              editSupplier
+                                ? editSupplier.name
+                                : supplierSearchTerm
+                            }
+                            onChange={(e) => {
+                              if (editSupplier) setEditSupplier(null);
+                              setSupplierSearchTerm(e.target.value);
+                              setSupplierDropdownOpen(true);
+                            }}
+                            onClick={() => setSupplierDropdownOpen(true)}
+                            required
+                          />
+                          {supplierDropdownOpen && (
+                            <div className="dropdown-menu">
+                              {filteredSuppliers.length > 0 ? (
+                                filteredSuppliers.map((supplier) => (
+                                  <div
+                                    key={supplier.id}
+                                    className="dropdown-item"
+                                    onClick={() => {
+                                      setEditSupplier(supplier);
+                                      setSupplierSearchTerm("");
+                                      setSupplierDropdownOpen(false);
+                                    }}
+                                  >
+                                    <div className="item-name">
+                                      {supplier.name}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="no-results">
+                                  No suppliers found
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="edit-truck-number">Truck Number</label>
+                        <input
+                          type="text"
+                          id="edit-truck-number"
+                          className="premium-input"
+                          placeholder="Enter truck number"
+                          value={editTruckNumber}
+                          onChange={(e) => setEditTruckNumber(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {activeTab === "production" && (
+                    <div className="form-group">
+                      <label>Machine</label>
+                      <select
+                        className="premium-input"
+                        value={editMachine?.id || ""}
+                        onChange={(e) => {
+                          const selectedMachine = machines.find(
+                            (machine) => machine.id === e.target.value
+                          );
+                          setEditMachine(selectedMachine || null);
+                        }}
+                        required
+                      >
+                        <option value="">Select machine...</option>
+                        {machines.map((machine) => (
+                          <option key={machine.id} value={machine.id}>
+                            {machine.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {activeTab === "dispatch" && (
+                    <>
+                      <div className="form-group">
+                        <label htmlFor="edit-truck-number">Truck Number</label>
+                        <input
+                          type="text"
+                          id="edit-truck-number"
+                          className="premium-input"
+                          placeholder="Enter truck number"
+                          value={editTruckNumber}
+                          onChange={(e) => setEditTruckNumber(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="edit-invoice-number">
+                          Invoice Number
+                        </label>
+                        <input
+                          type="text"
+                          id="edit-invoice-number"
+                          className="premium-input"
+                          placeholder="Enter invoice number"
+                          value={editInvoiceNumber}
+                          onChange={(e) => setEditInvoiceNumber(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button
+                    className="button-secondary"
+                    onClick={handleCloseEditModal}
+                    disabled={isUpdating}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button-primary"
+                    onClick={handleSaveEdit}
+                    disabled={isUpdating}
+                  >
+                    {isUpdating ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="content-placeholder">
@@ -501,6 +933,12 @@ const Audit = ({ userRole }) => {
           color: var(--neutral-800);
         }
 
+        .entry-actions {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+        }
+
         .entry-duplicate-tag {
           background-color: var(--warning-100);
           color: var(--warning-700);
@@ -508,6 +946,22 @@ const Audit = ({ userRole }) => {
           border-radius: 4px;
           font-size: 0.8rem;
           font-weight: 500;
+        }
+
+        .edit-button {
+          background-color: var(--primary-50);
+          color: var(--primary-600);
+          border: 1px solid var(--primary-200);
+          border-radius: 4px;
+          padding: 4px 8px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .edit-button:hover {
+          background-color: var(--primary-100);
         }
 
         .entry-body {
@@ -565,6 +1019,196 @@ const Audit = ({ userRole }) => {
         .loading {
           color: var(--primary-500);
           font-weight: 500;
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .edit-modal {
+          background-color: white;
+          border-radius: 8px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1),
+            0 1px 3px rgba(0, 0, 0, 0.08);
+          width: 90%;
+          max-width: 500px;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+
+        .modal-header {
+          padding: 15px 20px;
+          border-bottom: 1px solid var(--neutral-200);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: linear-gradient(
+            to right,
+            var(--primary),
+            var(--primary-light, #ff6b6b)
+          );
+          color: white;
+          border-top-left-radius: 8px;
+          border-top-right-radius: 8px;
+        }
+
+        .modal-header h3 {
+          margin: 0;
+          font-size: 1.2rem;
+        }
+
+        .close-button {
+          background: none;
+          border: none;
+          color: white;
+          font-size: 1.5rem;
+          cursor: pointer;
+          padding: 0;
+          line-height: 1;
+        }
+
+        .modal-body {
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+
+        .modal-footer {
+          padding: 15px 20px;
+          border-top: 1px solid var(--neutral-200);
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .form-group label {
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--neutral-700);
+        }
+
+        .premium-input {
+          padding: 10px 12px;
+          border: 1px solid var(--neutral-300);
+          border-radius: 6px;
+          font-size: 0.95rem;
+          transition: all 0.2s ease;
+          background-color: white;
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .premium-input:focus {
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.15);
+          outline: none;
+        }
+
+        .premium-input::placeholder {
+          color: var(--neutral-400);
+        }
+
+        /* Dropdown styles */
+        .dropdown-container {
+          position: relative;
+        }
+
+        .dropdown-menu {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          width: 100%;
+          background-color: white;
+          border: 1px solid var(--neutral-300);
+          border-radius: 4px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          max-height: 200px;
+          overflow-y: auto;
+          z-index: 10;
+        }
+
+        .dropdown-item {
+          padding: 8px 12px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+
+        .dropdown-item:hover {
+          background-color: var(--neutral-100);
+        }
+
+        .item-name {
+          font-weight: 500;
+          color: var(--neutral-800);
+        }
+
+        .item-details {
+          font-size: 0.8rem;
+          color: var(--neutral-600);
+        }
+
+        .no-results {
+          padding: 10px;
+          color: var(--neutral-500);
+          text-align: center;
+          font-size: 0.9rem;
+        }
+
+        .button-primary {
+          background-color: var(--primary);
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+
+        .button-primary:hover {
+          background-color: var(--primary-dark);
+        }
+
+        .button-primary:disabled {
+          background-color: var(--neutral-300);
+          cursor: not-allowed;
+        }
+
+        .button-secondary {
+          background-color: white;
+          color: var(--neutral-700);
+          border: 1px solid var(--neutral-300);
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .button-secondary:hover {
+          background-color: var(--neutral-100);
+          border-color: var(--neutral-400);
+        }
+
+        .button-secondary:disabled {
+          color: var(--neutral-400);
+          cursor: not-allowed;
         }
       `}</style>
     </div>
