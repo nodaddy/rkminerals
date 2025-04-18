@@ -3,6 +3,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppContextProvider } from "../context/AppContext";
 import { NotificationProvider } from "../context/NotificationContext";
+import HelpButton from "../components/HelpButton";
 import "./globals.css";
 import { useState, useEffect } from "react";
 
@@ -75,6 +76,28 @@ function ResponsiveCheck({ children }) {
 }
 
 export default function RootLayout({ children }) {
+  const [showHelpButton, setShowHelpButton] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    // Check if the current path is not the user manual page
+    const isNotManualPage = window.location.pathname !== "/user-manual";
+    setShowHelpButton(isNotManualPage);
+
+    // Listen for route changes
+    const handleRouteChange = () => {
+      const isNotManualPage = window.location.pathname !== "/user-manual";
+      setShowHelpButton(isNotManualPage);
+    };
+
+    window.addEventListener("popstate", handleRouteChange);
+
+    return () => {
+      window.removeEventListener("popstate", handleRouteChange);
+    };
+  }, []);
+
   return (
     <html lang="en">
       <head>
@@ -84,7 +107,10 @@ export default function RootLayout({ children }) {
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <AppContextProvider>
           <NotificationProvider>
-            <ResponsiveCheck>{children}</ResponsiveCheck>
+            <ResponsiveCheck>
+              {children}
+              {isClient && showHelpButton && <HelpButton />}
+            </ResponsiveCheck>
           </NotificationProvider>
         </AppContextProvider>
       </body>
