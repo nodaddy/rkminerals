@@ -13,6 +13,8 @@ import {
   doc,
   Timestamp,
   updateDoc,
+  deleteDoc,
+  addDoc,
 } from "firebase/firestore";
 import app from "../../../../firebase/config";
 import { useAppContext } from "../../../../context/AppContext";
@@ -43,6 +45,11 @@ const Audit = ({ userRole }) => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Delete entry state
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmModalOpen, setDeleteConfirmModalOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState(null);
 
   // Dropdown refs and state
   const productDropdownRef = useRef(null);
@@ -374,6 +381,128 @@ const Audit = ({ userRole }) => {
       const entryDocRef = doc(companyRef, getCollectionName(), editEntry.id);
       await updateDoc(entryDocRef, entryData);
 
+      // Calculate the quantity difference
+      const oldQuantity = parseFloat(editEntry.quantity) || 0;
+      const newQuantity = parseFloat(editQuantity) || 0;
+      const quantityDiff = newQuantity - oldQuantity;
+
+      // Update product stock based on changes
+      const productStockCollectionRef = collection(companyRef, "productStock");
+
+      // CASE 1: Only quantity changed, product remains the same
+      if (quantityDiff !== 0 && editProduct.id === editEntry.product.id) {
+        // Find the stock record for this product
+        const productStockQuery = query(
+          productStockCollectionRef,
+          where("productId", "==", editProduct.id)
+        );
+
+        const querySnapshot = await getDocs(productStockQuery);
+
+        if (!querySnapshot.empty) {
+          const stockDoc = querySnapshot.docs[0];
+          const stockData = stockDoc.data();
+          let newStockQuantity = stockData.availableQuantity || 0;
+
+          // For incoming and production entries, add the difference
+          // For dispatch entries, subtract the difference (because dispatch reduces stock)
+          if (activeTab === "incoming" || activeTab === "production") {
+            newStockQuantity += quantityDiff;
+          } else if (activeTab === "dispatch") {
+            newStockQuantity -= quantityDiff;
+          }
+
+          // Update the stock
+          await updateDoc(doc(productStockCollectionRef, stockDoc.id), {
+            availableQuantity: newStockQuantity,
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Updated stock for ${editProduct.technicalName} from ${stockData.availableQuantity} to ${newStockQuantity}`
+          );
+        }
+      }
+      // CASE 2: Product changed
+      else if (editProduct.id !== editEntry.product.id) {
+        // 1. Update old product stock - reverse the original entry's effect
+        const oldProductStockQuery = query(
+          productStockCollectionRef,
+          where("productId", "==", editEntry.product.id)
+        );
+
+        const oldProductSnapshot = await getDocs(oldProductStockQuery);
+
+        if (!oldProductSnapshot.empty) {
+          const oldStockDoc = oldProductSnapshot.docs[0];
+          const oldStockData = oldStockDoc.data();
+          let oldStockNewQuantity = oldStockData.availableQuantity || 0;
+
+          // For incoming/production, remove the old quantity; for dispatch, add it back
+          if (activeTab === "incoming" || activeTab === "production") {
+            oldStockNewQuantity -= oldQuantity;
+          } else if (activeTab === "dispatch") {
+            oldStockNewQuantity += oldQuantity;
+          }
+
+          // Update old product stock
+          await updateDoc(doc(productStockCollectionRef, oldStockDoc.id), {
+            availableQuantity: oldStockNewQuantity,
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Updated old product (${editEntry.product.technicalName}) stock to ${oldStockNewQuantity}`
+          );
+        }
+
+        // 2. Update new product stock - apply the new entry's effect
+        const newProductStockQuery = query(
+          productStockCollectionRef,
+          where("productId", "==", editProduct.id)
+        );
+
+        const newProductSnapshot = await getDocs(newProductStockQuery);
+
+        if (newProductSnapshot.empty) {
+          // New product doesn't have a stock record yet, create one
+          await addDoc(productStockCollectionRef, {
+            productId: editProduct.id,
+            productName: editProduct.technicalName,
+            productCommonName: editProduct.commonName,
+            availableQuantity:
+              activeTab === "dispatch" ? -newQuantity : newQuantity,
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Created new stock record for ${editProduct.technicalName} with ${newQuantity} units`
+          );
+        } else {
+          // Update existing stock for new product
+          const newStockDoc = newProductSnapshot.docs[0];
+          const newStockData = newStockDoc.data();
+          let newStockQuantity = newStockData.availableQuantity || 0;
+
+          // For incoming/production, add the new quantity; for dispatch, subtract it
+          if (activeTab === "incoming" || activeTab === "production") {
+            newStockQuantity += newQuantity;
+          } else if (activeTab === "dispatch") {
+            newStockQuantity -= newQuantity;
+          }
+
+          // Update new product stock
+          await updateDoc(doc(productStockCollectionRef, newStockDoc.id), {
+            availableQuantity: newStockQuantity,
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Updated new product (${editProduct.technicalName}) stock to ${newStockQuantity}`
+          );
+        }
+      }
+
       // Update local entries
       const updatedEntries = entries.map((entry) =>
         entry.id === editEntry.id
@@ -393,6 +522,90 @@ const Audit = ({ userRole }) => {
       showError("Failed to update entry");
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  // Handle delete button click
+  const handleDeleteClick = (entry) => {
+    setEntryToDelete(entry);
+    setDeleteConfirmModalOpen(true);
+  };
+
+  // Close delete confirmation modal
+  const handleCloseDeleteModal = () => {
+    setDeleteConfirmModalOpen(false);
+    setEntryToDelete(null);
+  };
+
+  // Delete entry
+  const handleDeleteEntry = async () => {
+    if (!entryToDelete) return;
+
+    setIsDeleting(true);
+
+    try {
+      // Delete document from Firestore
+      const companyRef = doc(db, "companies", companyId);
+      const entryDocRef = doc(
+        companyRef,
+        getCollectionName(),
+        entryToDelete.id
+      );
+      await deleteDoc(entryDocRef);
+
+      // Update product stock to reflect this deletion
+      if (entryToDelete.product && entryToDelete.product.id) {
+        const productStockCollectionRef = collection(
+          companyRef,
+          "productStock"
+        );
+
+        // Find the stock record for this product
+        const productStockQuery = query(
+          productStockCollectionRef,
+          where("productId", "==", entryToDelete.product.id)
+        );
+
+        const querySnapshot = await getDocs(productStockQuery);
+
+        if (!querySnapshot.empty) {
+          const stockDoc = querySnapshot.docs[0];
+          const stockData = stockDoc.data();
+          let newStockQuantity = stockData.availableQuantity || 0;
+          const entryQuantity = parseFloat(entryToDelete.quantity) || 0;
+
+          // For incoming/production, remove the quantity; for dispatch, add it back
+          if (activeTab === "incoming" || activeTab === "production") {
+            newStockQuantity -= entryQuantity;
+          } else if (activeTab === "dispatch") {
+            newStockQuantity += entryQuantity;
+          }
+
+          // Update the stock
+          await updateDoc(doc(productStockCollectionRef, stockDoc.id), {
+            availableQuantity: newStockQuantity,
+            lastUpdated: Timestamp.now(),
+          });
+
+          console.log(
+            `Updated stock for ${entryToDelete.product.technicalName} to ${newStockQuantity} after deleting entry`
+          );
+        }
+      }
+
+      // Update local entries
+      const updatedEntries = entries.filter(
+        (entry) => entry.id !== entryToDelete.id
+      );
+      setEntries(updatedEntries);
+
+      showSuccess("Entry deleted successfully");
+      handleCloseDeleteModal();
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+      showError("Failed to delete entry");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -560,6 +773,12 @@ const Audit = ({ userRole }) => {
                         onClick={() => handleEditClick(entry)}
                       >
                         Edit
+                      </button>
+                      <button
+                        className="delete-button"
+                        onClick={() => handleDeleteClick(entry)}
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -834,6 +1053,42 @@ const Audit = ({ userRole }) => {
               </div>
             </div>
           )}
+
+          {/* Delete Confirmation Modal */}
+          {deleteConfirmModalOpen && (
+            <div className="modal-overlay">
+              <div className="delete-modal">
+                <div className="modal-header">
+                  <h3>Confirm Deletion</h3>
+                  <button
+                    className="close-button"
+                    onClick={handleCloseDeleteModal}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <p>Are you sure you want to delete this entry?</p>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    className="button-secondary"
+                    onClick={handleCloseDeleteModal}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button-primary"
+                    onClick={handleDeleteEntry}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="content-placeholder">
@@ -964,6 +1219,22 @@ const Audit = ({ userRole }) => {
           background-color: var(--primary-100);
         }
 
+        .delete-button {
+          background-color: var(--error-50);
+          color: var(--error-600);
+          border: 1px solid var(--error-200);
+          border-radius: 4px;
+          padding: 4px 8px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .delete-button:hover {
+          background-color: var(--error-100);
+        }
+
         .entry-body {
           padding: 15px;
           display: flex;
@@ -1046,6 +1317,15 @@ const Audit = ({ userRole }) => {
           overflow-y: auto;
         }
 
+        .delete-modal {
+          background-color: white;
+          border-radius: 8px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1),
+            0 1px 3px rgba(0, 0, 0, 0.08);
+          width: 90%;
+          max-width: 400px;
+        }
+
         .modal-header {
           padding: 15px 20px;
           border-bottom: 1px solid var(--neutral-200);
@@ -1065,6 +1345,32 @@ const Audit = ({ userRole }) => {
         .modal-header h3 {
           margin: 0;
           font-size: 1.2rem;
+        }
+
+        .delete-modal .modal-header {
+          background: linear-gradient(
+            to right,
+            var(--error-600),
+            var(--error-500)
+          );
+        }
+
+        .delete-modal .modal-body {
+          text-align: center;
+          padding: 25px 20px;
+        }
+
+        .delete-modal .modal-body p {
+          font-size: 1.1rem;
+          margin: 0;
+        }
+
+        .delete-modal .button-primary {
+          background-color: var(--error-600);
+        }
+
+        .delete-modal .button-primary:hover {
+          background-color: var(--error-700);
         }
 
         .close-button {
