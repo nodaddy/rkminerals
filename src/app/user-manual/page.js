@@ -329,11 +329,7 @@ export default function UserManual() {
               <h3>Managing Bag Inventory</h3>
               <ol>
                 <li>View current bag inventory levels by type</li>
-                <li>Record new bag receipts when inventory is replenished</li>
                 <li>Track bag usage in production processes</li>
-                <li>
-                  Generate reports on bag consumption and inventory status
-                </li>
               </ol>
               <p>
                 Properly managing bag inventory helps ensure production can
