@@ -1079,7 +1079,9 @@ const Audit = ({ userRole }) => {
                     Cancel
                   </button>
                   <button
-                    className="button-primary"
+                    style={{
+                      backgroundColor: "red",
+                    }}
                     onClick={handleDeleteEntry}
                     disabled={isDeleting}
                   >
