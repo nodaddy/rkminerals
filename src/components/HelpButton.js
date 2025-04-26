@@ -19,8 +19,8 @@ const HelpButton = () => {
         position: "fixed",
         bottom: "30px",
         left: "30px",
-        width: "60px",
-        height: "60px",
+        width: "50px",
+        height: "50px",
         borderRadius: "50%",
         backgroundColor: "var(--primary)",
         color: "white",
@@ -37,12 +37,12 @@ const HelpButton = () => {
         transform: isHovered ? "scale(1.1)" : "scale(1)",
       }}
     >
-      <FaQuestion size={24} />
+      <FaQuestion size={20} />
       {isHovered && (
         <span
           style={{
             position: "absolute",
-            left: "70px",
+            left: "60px",
             backgroundColor: "white",
             color: "var(--neutral-800)",
             padding: "8px 12px",
