@@ -54,7 +54,7 @@ export function AppContextProvider({ children }) {
 
     const claims = await getUserClaims(currentUser);
     if (claims && claims.companyId) {
-      setUserRole(claims?.role || "admin");
+      setUserRole(claims?.role);
       setCompanyId(claims?.companyId);
     } else {
       setUserRole("user"); // Default role if none is specified
